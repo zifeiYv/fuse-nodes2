@@ -261,7 +261,8 @@ def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
     Returns:
 
     """
-    logger.info(f"{'  '*i}Getting data...")
+    if i != 0:
+        logger.info(f"{'  '*i}Getting data...")
     if not cms_data:
         logger.warning(f"{'  '*i}No data from cms system!")
         cms_data = None
@@ -297,7 +298,7 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
 
     Args:
         i(int): Fused nodes's number, used to generate pretty log
-        none_counts(int): 0 or 1, whether a `None` object in arguments
+        none_counts(int): 0, 1 or 2, `None` values' number
         cms_data(list[dict]): Node data from cms
         pms_data(list[dict]): Node data from pms
         gis_data(list[dict]): Node data from gis
@@ -376,33 +377,9 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
     res1 = computer.compute(cms_data, pms_data)
     res2 = computer.compute(cms_data, gis_data)
     res3 = computer.compute(pms_data, gis_data)
-    # todo: how to handle if `res1`/`res2`/`res3` is None?
     logger.info(f"{'  '*i}Done")
     logger.info(f"{'  '*i}Combining node ids...")
-    res = []
-    for j in res1:
-        if j.count(None) == 0:  # cms and pms matched
-            cms_id, pms_id = cms_data[j[0]]['id_'], pms_data[j[1]]['id_']
-            for k in res2:
-                if k[0] is not None:  # cms data
-                    if cms_id == cms_data[k[0]]['id_']:
-                        gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
-                        res.append([cms_id, pms_id, gis_id])
-        else:
-            if j[0] is None:  # without cms data
-                pms_id = pms_data[j[1]]['id_']
-                for k in res3:
-                    if k[0] is not None:  # pms data
-                        if pms_id == pms_data[k[0]]['id_']:
-                            gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
-                            res.append([None, pms_id, gis_id])
-            else:  # without pms data
-                cms_id = cms_data[j[0]]['id_']
-                for k in res2:
-                    if k[0] is not None:  # cms data
-                        if cms_id == cms_data[k[0]]['id_']:
-                            gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
-                            res.append([cms_id, None, gis_id])
+    res = combine(res1, res2, res3, cms_data, pms_data, gis_data)
     logger.info(f"{'  '*i}Done")
     return res
 
@@ -513,9 +490,10 @@ class Computation:
                 continue
             else:
                 w = float(k.split('_')[-1])
-                if k.startswith("TEXT"):
+                # Two kinds of properties are supported for now
+                if k.startswith("TEXT"):  # Text-properties
                     sim += w * sims(dict1[k], dict2[k])
-                else:
+                else:  # Enumerated properties
                     if dict1[k] == dict2[k]:
                         sim += w
                     else:
@@ -523,7 +501,7 @@ class Computation:
         return sim
 
     def __match(self, sim_matrix):
-        """Calculate the most similar entity pairs according to `sim_matrix`.
+        """Select the most similar entity pairs according to `sim_matrix`.
 
         Note that `numpy.array.argmax()` only return the first index of maximum value even if there are more than
         one maximums, which may bring some confusion in certain cases.
@@ -577,3 +555,109 @@ class Computation:
             if j not in y:
                 res.append([None, j])
         return res
+
+
+def combine(res1, res2, res3, cms_data, pms_data, gis_data):
+    """Combine similarity results.
+
+    Every argument in `res`, `res2` and `res3` could be a nested list or `None`, which
+    leads to 8 combination methods in total.
+
+    Args:
+        res1: cms-pms matching results or None
+        res2: cms-gis matching results or None
+        res3: pms-gis matching results or None
+        cms_data: list of dicts
+        pms_data: list of dicts
+        gis_data: list of dicts
+
+    Returns:
+        A final list
+    """
+    final_res = []
+    # case 1: None, None, None
+    if res1 is None and res2 is None and res3 is None:
+        return final_res
+    # case2: None, None, ~
+    if res1 is None and res2 is None and isinstance(res3, list):
+        for i in res3:
+            final_res.append([None, pms_data[i[0]]['id_'], gis_data[i[1]]['id_']])
+        return final_res
+    # case3: None, ~, None
+    if res1 is None and isinstance(res2, list) and res3 is None:
+        for i in res2:
+            final_res.append([cms_data[i[0]]['id_'], None, gis_data[i[1]]['id_']])
+        return final_res
+    # case4: ~, None, None
+    if isinstance(res1, list) and res2 is None and res3 is None:
+        for i in res1:
+            final_res.append([cms_data[i[0]]['id_'], pms_data[i[1]]['id_'], None])
+        return final_res
+    # case5: None, ~, ~
+    if res1 is None and isinstance(res2, list) and isinstance(res3, list):
+        for i in res2:
+            j = []
+            for j in res3:
+                if i[1] is not None and i[1] == j[1]:
+                    final_res.append([cms_data[i[0]]['id_'], pms_data[j[0]]['id_'],
+                                      gis_data[j[1]]['id_']])
+                    res3.remove(j)
+                    break
+            if j == res3[-1]:
+                final_res.append([cms_data[i[0]]['id_'], None, gis_data[i[1]]['id_']])
+        for j in res3:
+            final_res.append([None, pms_data[j[0]]['id_'], gis_data[j[1]]['id_']])
+        return final_res
+    # case6: ~, ~, None
+    if isinstance(res1, list) and isinstance(res2, list) and res3 is None:
+        for i in res1:
+            j = []
+            for j in res2:
+                if i[0] is not None and i[0] == j[0]:
+                    final_res.append([cms_data[i[0]]['id_'], pms_data[i[1]]['id_'],
+                                      gis_data[j[1]]['id_']])
+                    res2.remove(j)
+                    break
+            if j == res2[-1]:
+                final_res.append([cms_data[i[0]]['id_'], pms_data[i[1]]['id_'], None])
+        for j in res2:
+            final_res.append([cms_data[j[0]]['id_'], None, gis_data[j[1]]['id_']])
+    # case7: ~, None, ~
+    if isinstance(res1, list) and res2 is None and isinstance(res3, list):
+        for i in res1:
+            j = []
+            for j in res3:
+                if i[1] is not None and i[1] == j[0]:
+                    final_res.append([cms_data[i[0]]['id_'], pms_data[i[1]]['id_'],
+                                      gis_data[j[1]]['id_']])
+                    res3.remove(j)
+                    break
+            if j == res3[-1]:
+                final_res.append([cms_data[i[0]]['id_'], pms_data[i[1]]['id_'], None])
+        for j in res3:
+            final_res.append([None, pms_data[j[0]]['id_'], gis_data[j[1]]['id_']])
+    # case8: ~, ~, ~
+    for i in res1:
+        if i.count(None) == 0:
+            cms_id, pms_id = cms_data[i[0]]['id_'], pms_data[i[1]]['id_']
+            for j in res2:
+                if j[0] is not None:
+                    if cms_id == cms_data[j[0]]['id_']:
+                        gis_id = gis_data[j[1]]['id_'] if j[1] is not None else None
+                        final_res.append([cms_id, pms_id, gis_id])
+        else:
+            if i[0] is None:
+                pms_id = pms_data[i[1]]['id_']
+                for k in res3:
+                    if k[0] is not None:
+                        if pms_id == pms_data[k[0]]['id_']:
+                            gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
+                            final_res.append([None, pms_id, gis_id])
+            else:
+                cms_id = cms_data[i[0]]['id_']
+                for k in res2:
+                    if k[0] is not None:
+                        if cms_id == cms_data[k[0]]['id_']:
+                            gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
+                            final_res.append([cms_id, None, gis_id])
+    return final_res

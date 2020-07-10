@@ -66,7 +66,7 @@ def check():
     fuse_entities = cfg.get('fuse', 'entities').split(',')
     fuse_rel = cfg.get('fuse', 'relationships').split(',')
 
-    # Does the number of entities, relationships and properties matches each other?
+    # Does the number of entities, relationships and properties match each other?
     if cms:
         func(cms_entities, cms_rel)
         if len(cms_entities) != len(cms_pros):

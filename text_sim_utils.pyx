@@ -7,7 +7,9 @@
 import Levenshtein as Lvst
 import numpy as np
 import jieba
+import logging
 
+debug_logger = logging.getLogger(__file__)
 
 cdef double lvst_dis(str string1, str string2):
     """Return the edit distance of two strings.
@@ -100,9 +102,11 @@ cpdef double sims(str string1, str string2, methods=None):
     Returns:
         Similarity value
     """
-    if string1 is None:
+    if not isinstance(string1, str):
+        debug_logger.warning(f'{string1} is not str')
         return 0
-    if string2 is None:
+    if not isinstance(string2, str):
+        debug_logger.warning(f'{string2} is not str')
         return 0
     cdef double sim=0.0
     if not methods:
