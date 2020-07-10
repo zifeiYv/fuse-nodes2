@@ -11,12 +11,12 @@ from py2neo import Graph, Node, Relationship
 
 cfg = ConfigParser()
 
-with open('config_files/application.cfg') as f:
+with open('./config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 
-with open('config_files/neo4j-structure.cfg') as f:
+with open('./config_files/neo4j-structure.cfg') as f:
     cfg.read_file(f)
 fused_entities = cfg.get('fuse', 'entities').split(',')
 fused_rel = cfg.get('fuse', 'relationships').split(',')

@@ -20,7 +20,7 @@ logger = gen_logger('fuse.log', 1)
 logger.info("Get necessary information before starting fusing...")
 cfg = ConfigParser()
 # neo4j connection info
-with open('config_files/application.cfg') as f:
+with open('./config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
@@ -28,7 +28,7 @@ mysql = cfg.get('mysql', 'mysql')
 THRESHOLD = cfg.getfloat('threshold', 'threshold')
 
 # entities info
-with open('config_files/neo4j-structure.cfg') as f:
+with open('./config_files/neo4j-structure.cfg') as f:
     cfg.read_file(f)
 cms, pms, gis = cfg.get('system_label', 'cms'), cfg.get('system_label', 'pms'), cfg.get('system_label', 'gis')
 fused_entities = cfg.get('fuse', 'entities').split(',')

@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     cfg = ConfigParser()
 
-    with open('config_files/application.cfg') as f:
+    with open('./config_files/application.cfg') as f:
         cfg.read_file(f)
     processes = cfg.getint('distributed', 'processes')
     if not processes:

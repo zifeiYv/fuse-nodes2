@@ -43,7 +43,7 @@ def check():
     cfg = ConfigParser()
     # Is there a `neo4j-structure.cfg` file?
     try:
-        with open('config_files/neo4j-structure.cfg') as f:
+        with open('./config_files/neo4j-structure.cfg') as f:
             cfg.read_file(f)
     except FileNotFoundError:
         raise
