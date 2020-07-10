@@ -43,7 +43,7 @@ def check():
     cfg = ConfigParser()
     # Is there a `neo4j-structure.cfg` file?
     try:
-        with open('config_files/neo4j-structure.cfg') as f:
+        with open('./config_files/neo4j-structure.cfg') as f:
             cfg.read_file(f)
     except FileNotFoundError:
         raise
@@ -66,7 +66,7 @@ def check():
     fuse_entities = cfg.get('fuse', 'entities').split(',')
     fuse_rel = cfg.get('fuse', 'relationships').split(',')
 
-    # Does the number of entities, relationships and properties match each other?
+    # Does the number of entities, relationships and properties matches each other?
     if cms:
         func(cms_entities, cms_rel)
         if len(cms_entities) != len(cms_pros):
@@ -130,7 +130,7 @@ def check():
                     raise PropertiesNotMatch(f"'ENUM' properties doesn't match among three systems(property no. {i})")
 
     try:
-        with open('config_files/application.cfg') as f:
+        with open('./config_files/application.cfg') as f:
             cfg.read_file(f)
     except FileNotFoundError:
         raise

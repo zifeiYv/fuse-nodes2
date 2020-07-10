@@ -12,16 +12,17 @@ from configparser import ConfigParser
 import os
 
 
-# parser = argparse.ArgumentParser()
-#
-# parser.add_argument('--new-label', type=str, required=True, help='生成的融合图的标签')
-# parser.add_argument('--multi', type=int, default=0, choices=[0, 1], help='是否采用多进程加速运算，默认不采用')
-#
-# args = parser.parse_args()
-# label = args.new_label
-# multi = args.multi
-label = 'merge'
-multi = 0
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--new-label', type=str, required=True, help='生成的融合图的标签')
+parser.add_argument('--multi', type=int, default=0, choices=[0, 1], help='是否采用多进程加速运算，默认不采用')
+
+args = parser.parse_args()
+label = args.new_label
+multi = args.multi
+# label = 'yh'
+# multi = 0
+
 
 if __name__ == '__main__':
     print("Checking config files...")
@@ -33,12 +34,12 @@ if __name__ == '__main__':
 
     cfg = ConfigParser()
 
-    with open('config_files/application.cfg') as f:
+    with open('./config_files/application.cfg') as f:
         cfg.read_file(f)
     processes = cfg.getint('distributed', 'processes')
     if not processes:
         processes = os.cpu_count()
-    print("Fusing started")
+    print("****************Fusing root data firstly****************")
     from utils import fuse_root_nodes
     root_results = fuse_root_nodes(multi, processes)
     if multi:

@@ -9,7 +9,7 @@ import numpy as np
 import jieba
 
 
-def lvst_dis(string1, string2) -> float:
+cdef double lvst_dis(str string1, str string2):
     """Return the edit distance of two strings.
 
     Args:
@@ -19,11 +19,12 @@ def lvst_dis(string1, string2) -> float:
     Returns:
         Similarity value
     """
+    cdef double dis
     dis = Lvst.distance(string1, string2)
     return 1 - dis / max(len(string1), len(string2))
 
 
-def lcs(string1, string2) -> float:
+cdef double lcs(str string1, str string2):
     """Return the ratio of longest common string length to maximum length of original strings.
 
     Args:
@@ -36,7 +37,8 @@ def lcs(string1, string2) -> float:
     if len(string1) == 0 or len(string2) == 0:
         return 0
     dp = [[0 for _ in range(len(string2) + 1)] for _ in range(len(string1) + 1)]
-    max_len = 0
+    cdef int max_len = 0, i, j
+    cdef double comm_sim
     for i in range(1, len(string1) + 1):
         for j in range(1, len(string2) + 1):
             if string1[i - 1] == string2[j - 1]:
@@ -48,7 +50,7 @@ def lcs(string1, string2) -> float:
     return comm_sim
 
 
-def cosine_sim(string1, string2) -> float:
+cdef double cosine_sim(str string1, str string2):
     """Return the cosine similarity of two strings.
 
     Args:
@@ -72,6 +74,8 @@ def cosine_sim(string1, string2) -> float:
 
     # 计算词频
     # 依次确定向量的每个位置的值
+    cdef int i, j, k
+    cdef double cos_sim
     for i in range(len(key_word)):
         # 遍历key_word中每个词在句子中的出现次数
         for j in range(len(list_word1)):
@@ -85,7 +89,7 @@ def cosine_sim(string1, string2) -> float:
     return cos_sim
 
 
-def sims(string1, string2, methods=None) -> float:
+cpdef double sims(str string1, str string2, methods=None):
     """Call three methods above to compute similarity.
 
     Args:
@@ -100,7 +104,7 @@ def sims(string1, string2, methods=None) -> float:
         return 0
     if string2 is None:
         return 0
-    sim = 0
+    cdef double sim=0.0
     if not methods:
         methods = {"lvst": 1, "lcs": 0, "cos": 0}
     else:
@@ -117,5 +121,5 @@ def sims(string1, string2, methods=None) -> float:
     return sim
 
 
-class UnNormalizedWeight(Exception):
+cdef class UnNormalizedWeight(Exception):
     pass

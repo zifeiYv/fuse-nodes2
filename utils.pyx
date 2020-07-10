@@ -20,7 +20,7 @@ logger = gen_logger('fuse.log', 1)
 logger.info("Get necessary information before starting fusing...")
 cfg = ConfigParser()
 # neo4j connection info
-with open('config_files/application.cfg') as f:
+with open('./config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
@@ -28,7 +28,7 @@ mysql = cfg.get('mysql', 'mysql')
 THRESHOLD = cfg.getfloat('threshold', 'threshold')
 
 # entities info
-with open('config_files/neo4j-structure.cfg') as f:
+with open('./config_files/neo4j-structure.cfg') as f:
     cfg.read_file(f)
 cms, pms, gis = cfg.get('system_label', 'cms'), cfg.get('system_label', 'pms'), cfg.get('system_label', 'gis')
 fused_entities = cfg.get('fuse', 'entities').split(',')
@@ -61,7 +61,7 @@ weight = cfg.get('weight', 'weight').split('&')
 logger.info("Done")
 
 
-def fuse_and_create(args):
+cpdef fuse_and_create(args):
     """Used for multi-processes mode"""
     label, res, cur, tot = args
     logger.info(f"Progress:{cur+1}/{tot}")
@@ -75,7 +75,7 @@ def fuse_and_create(args):
     logger.info("  Done")
 
 
-def fuse_root_nodes(is_multi: bool = False, processes: int = 0):
+cpdef fuse_root_nodes(is_multi: bool = False, processes: int = 0):
     """Function to fuse the first label in config files"""
     # `ce`/`pe`/`ge` stand for `cms-entity`/`pms-entity`/`gis-entity`
     ce, pe, ge = cms_entities[0], pms_entities[0], gis_entities[0]
@@ -297,7 +297,7 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
 
     Args:
         i(int): Fused nodes's number, used to generate pretty log
-        none_counts(int): 0, 1 or 2, `None` values' number
+        none_counts(int): 0 or 1, whether a `None` object in arguments
         cms_data(list[dict]): Node data from cms
         pms_data(list[dict]): Node data from pms
         gis_data(list[dict]): Node data from gis
@@ -439,7 +439,6 @@ def save_to_mysql(sub_graph):
         for i in range(len(nodes)):
             if nodes[i] is not None:
                 _check.append(1)
-                # args.append(nodes[i])
                 data = g.run(f"match(n) where id(n)={nodes[i]} return n.cityCode "
                              f"as city_code, n.mRID as mrid, n.countyCode as county_code, n.gdsCode as gds_code").data()
                 if data:
