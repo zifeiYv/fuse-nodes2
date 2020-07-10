@@ -21,7 +21,7 @@ import os
 # label = args.new_label
 # multi = args.multi
 label = 'merge'
-multi = 0
+multi = False
 
 if __name__ == '__main__':
     print("Checking config files...")
@@ -41,6 +41,8 @@ if __name__ == '__main__':
     print("Fusing started")
     from utils import fuse_root_nodes
     root_results = fuse_root_nodes(multi, processes)
+    if root_results is None:
+        print("Foot nodes have not fuse results")
     if multi:
         inputs = [[label, root_results[i], i, len(root_results)] for i in range(len(root_results))]
         with open('./inputs.pkl', 'wb') as f:

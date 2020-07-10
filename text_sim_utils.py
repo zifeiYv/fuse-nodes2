@@ -7,6 +7,9 @@
 import Levenshtein as Lvst
 import numpy as np
 import jieba
+import logging
+
+debug_logger = logging.getLogger(__file__)
 
 
 def lvst_dis(string1, string2) -> float:
@@ -96,9 +99,11 @@ def sims(string1, string2, methods=None) -> float:
     Returns:
         Similarity value
     """
-    if string1 is None:
+    if not isinstance(string1, str):
+        debug_logger.warning(f'{string1} is not str')
         return 0
-    if string2 is None:
+    if not isinstance(string2, str):
+        debug_logger.warning(f'{string2} is not str')
         return 0
     sim = 0
     if not methods:
