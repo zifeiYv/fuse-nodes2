@@ -1,3 +1,6 @@
+# 0. Cython版本
+利用Cython，对融合代码中的一些可能影响效率的部分进行了优化加速。
+
 # 1. python基础环境部署
 1.1 推荐安装`Anaconda`，版本为`4.8.2`，下载地址为：https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda3-2020.02-Linux-x86_64.sh
 
@@ -17,6 +20,11 @@
 3.1 需要配置的参数在`./config_files`文件夹内，一共有两个，分别是：`application.cfg`和`neo4j-structure.cfg`。在对应的文件中，已经解释了每个参数的含义以及设置方式，按照说明执行即可。
 
 # 4. 执行融合命令
+4.0 编译代码，执行以下命令：
+```python
+python setup.py build_ext --inplace
+```
+
 4.1 融合的入口为`run_cmd.py`脚本，以命令行参数的形式传入生成的融合图的标签，基本用法如下：
 ```python
  python run_cmd.py --new-label xxxx
