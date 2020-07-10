@@ -1,0 +1,8 @@
+.idea/
+__pycache__/
+logs/
+inputs.pkl
+multi.out
+build/
+*.so
+*.c
