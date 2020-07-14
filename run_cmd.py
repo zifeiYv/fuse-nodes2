@@ -4,34 +4,19 @@
 @Author : sunjiawei
 @E-mail : j.w.sun1992@gmail.com
 """
-import argparse
 import pickle
 from self_test import check
 from subgraphs import delete_old
-from configparser import ConfigParser
 import os
 
-
-# parser = argparse.ArgumentParser()
-#
-# parser.add_argument('--new-label', type=str, required=True, help='生成的融合图的标签')
-# parser.add_argument('--multi', type=int, default=0, choices=[0, 1], help='是否采用多进程加速运算，默认不采用')
-#
-# args = parser.parse_args()
-# label = args.new_label
-# multi = args.multi
-label = 'merge'
-multi = False
 
 if __name__ == '__main__':
     print("Checking config files...")
     check()
     print("Everything goes well\n")
     print("Deleting old results...")
-    delete_old(label)
+    delete_old('merge')
     print("Finish delete\n")
-
-    cfg = ConfigParser()
 
     with open('./config_files/application.cfg') as f:
         cfg.read_file(f)
