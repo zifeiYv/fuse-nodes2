@@ -1,8 +1,35 @@
 # -*- coding: utf-8 -*-
 """
-@Time   : 2020/6/18 3:02 下午
-@Author : sunjiawei
-@E-mail : j.w.sun1992@gmail.com
+#-------------------------------------------------------------------#
+#                    Project Name : 实体融合                         #
+#                                                                   #
+#                       File Name : text_sim_utils.py               #
+#                                                                   #
+#                          Author : Jiawei Sun                      #
+#                                                                   #
+#                          Email : j.w.sun1992@gmail.com            #
+#                                                                   #
+#                      Start Date : 2020/07/14                      #
+#                                                                   #
+#                     Last Update :                                 #
+#                                                                   #
+#-------------------------------------------------------------------#
+# Desc:                                                             #
+#    Some functions used to compute similarity between two          #
+#    strings.                                                       #
+#                                                                   #
+# Classes:                                                          #
+#    UnNormalizedWeight-Exception will be raised when weigh is not  #
+#         correct.                                                  #
+#                                                                   #
+# Functions:                                                        #
+#    lvst_dis-Edit distance                                         #
+#    lcs-Longest common string distance                             #
+#    cosine_sim-Cosine distance                                     #
+#    sims-Combine the three distance above and assign specific      #
+#         weights                                                   #
+#                                                                   #
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 """
 import Levenshtein as Lvst
 import numpy as np

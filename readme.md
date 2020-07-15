@@ -14,7 +14,7 @@
 2.1 所有的依赖包已经离线下载到`./pkgs`文件夹内，只需要执行`pip install --no-index --find-links=./pkgs -r requirements.txt`即可完成安装
 
 # 3. 参数配置
-3.1 需要配置的参数在`./config_files`文件夹内，一共有两个，分别是：`application.cfg`和`neo4j-structure.cfg`。在对应的文件中，已经解释了每个参数的含义以及设置方式，按照说明执行即可。
+3.1 需要配置的参数在`./config_files`文件夹内，一共有两个，分别是：`application.cfg`和`format.xlsx`。在对应的文件中，已经解释了每个参数的含义以及设置方式，按照说明执行即可。
 
 # 4. 执行融合命令
 4.1 融合的入口为`run_cmd.py`脚本，以命令行参数的形式传入生成的融合图的标签，基本用法如下：

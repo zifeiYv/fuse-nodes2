@@ -3,13 +3,13 @@
 #-------------------------------------------------------------------#
 #                    Project Name : 实体融合                         #
 #                                                                   #
-#                       File Name : trie.py                         #
+#                       File Name : log_utils.py                    #
 #                                                                   #
 #                          Author : Jiawei Sun                      #
 #                                                                   #
 #                          Email : j.w.sun1992@gmail.com            #
 #                                                                   #
-#                      Start Date : 2020/07/15                      #
+#                      Start Date : 2020/07/14                      #
 #                                                                   #
 #                     Last Update :                                 #
 #                                                                   #
@@ -19,44 +19,46 @@
 #                                                                   #
 # Classes:                                                          #
 #                                                                   #
-#                                                                   #
+#                                                                   #  
 # Functions:                                                        #
 #                                                                   #
 #                                                                   #
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 """
+import logging
+from logging.handlers import RotatingFileHandler
+from logging import StreamHandler
+import os
 
 
-class Nodes:
-    """定义一个类来存储一个单独的子图。
+def gen_logger(log_file_name, console_printing=False):
+    """生成一个日志记录器
 
-    对于任意一行融合根节点的数据得到的结果，都是一个根节点，从该根节点出发，结合配置文件中
-    的融合结构一直融合到最后一级实体，即得到来一颗树，称为子图。
+    Args:
+        log_file_name(str): 日志文件的名称
+        console_printing(bool): 是否在控制台打印日志
 
-    存储该子图，以便于后续在Neo4j中生成新的融合图。
+    Returns:
+        一个日志记录器
     """
-    def __init__(self, label: str, value: list, rel: str = None):
-        """实例化时，需要传入两个参数。
+    cwd = os.getcwd()
+    path = os.path.join(cwd, 'logs')
+    if not os.path.exists(path):
+        os.makedirs(path)
+    log_file_name = path + '/' + log_file_name
 
-        Args:
-            label: 该层级的设备类型的标签
-            value: 按照配置文件中的系统的顺序，依次记录该实体对应于各个系统中的节点的id
-            rel: 记录上级实体到本实体的关系标签，如果是根节点，那么为None
-        """
-        self.children = []
-        self.label = label
-        self.value = value
-        self.rel = rel
+    logger = logging.getLogger(log_file_name)
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:  # 避免重复添加handler
+        console = StreamHandler()
+        handler = RotatingFileHandler(log_file_name, maxBytes=3 * 1024 * 1024, backupCount=5)
+        formatter = logging.Formatter(
+            '%(process)d %(asctime)s %(levelname)7s %(filename)10s %(lineno)3d | %(message)s ',
+            datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        console.setFormatter(formatter)
 
-    def add_child(self, node):
-        """此方法的作用是，为融合后的实体添加子实体。
-
-        各个参数的含义与实例化时的含义相同。
-
-        Args:
-            node(Nodes):
-
-        Returns:
-
-        """
-        self.children.append(node)
+        logger.addHandler(handler)
+        if console_printing:
+            logger.addHandler(console)
+    return logger
