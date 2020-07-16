@@ -14,16 +14,11 @@
 #                     Last Update :                                 #
 #                                                                   #
 #-------------------------------------------------------------------#
-# Desc:                                                             #
-#                                                                   #
-#                                                                   #
-# Classes:                                                          #
-#                                                                   #
-#                                                                   #
-# Functions:                                                        #
-#                                                                   #
-#                                                                   #
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+
+问题记录：
+    - 嵌套递归的效率问题。
+    -
+
 """
 import pandas as pd
 import numpy as np
@@ -143,34 +138,35 @@ def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
     return df.append(fuse_root_nodes(label, pro, not_extract))
 
 
-def fuse_other_nodes(start_index: int, node):
+def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
     """通过递归的方式，根据给出的根节点融合结果，对其下所有可能的节点进行融合。
+
+    此函数没有返回值，而是将对传入的node参数进行改写，以不断挂接新的子节点。
 
     Args:
         start_index: 指定当前是第几级实体，用于控制递归的进行，0表示根节点，依次递加
         node(Nodes): 一个节点对象，存储父节点的有关信息
+        sorted_sys: 配置文件中基准系统的选取序列
 
     Returns:
 
     """
     if start_index == LABEL.shape[0]:  # 已经到达最后一级实体
-        return None
+        return
     label_df = LABEL.copy()
-    sorted_sys = sort_sys(LABEL)
 
-    # 先基于父实体的，对其直接自节点进行完全融合
+    # 先基于父实体的id，对其直接子节点进行完全融合
     df = fuse_in_same_level(label_df, node.value, start_index)
 
     if df is None:
-        return None
+        return
     for i in range(df.shape[0]):
         value = df.iloc[i].to_list()
         label = LABEL[sorted_sys[min(sorted_sys)]].iloc[start_index]
         rel = REL[sorted_sys[min(sorted_sys)]].iloc[start_index-1]
         child = Nodes(label, value, rel)
+        fuse_other_nodes(start_index + 1, child, sorted_sys)
         node.add_child(child)
-        fuse_other_nodes(start_index + 1, child)
-    return node
 
 
 def get_data(system: str, ent_lab: str, pro, not_extract=None):
@@ -411,7 +407,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
 
     Args:
         label_df: 存储系统与实体标签的data frame
-        not_extract: 不抽取的实体id列表
+        not_extract: 不抽取的实体id列表，按系统名称的字典存储
         root_results: 存储根节点的id列表
         start_index: 待融合实体的层级
 
@@ -445,7 +441,8 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     base_p_id = root_results[systems.index(base_sys)]
     if np.isnan(base_p_id):
         return None
-    base_data = get_data2(base_sys, base_pros, start_index - 1, base_p_id)
+    base_data = get_data2(base_sys, base_pros, start_index - 1, base_p_id,
+                          not_extract.get(base_sys))
     if not base_data:
         return None
 
@@ -459,7 +456,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
             continue
         if not isinstance(labels[systems.index(tar_sys)], str):
             continue
-        tar_data = get_data2(tar_sys, tar_pros, start_index - 1, tar_p_id)
+        tar_data = get_data2(tar_sys, tar_pros, start_index - 1, tar_p_id, not_extract.get(tar_sys))
         if not tar_data:
             continue
         similarities[tar_sys], _not_extract = compute(base_data, tar_data,
@@ -473,8 +470,8 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     return df.append(fuse_in_same_level(label_df, root_results, start_index, not_extract))
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # df = fuse_root_nodes(LABEL, PRO, sort_sys(LABEL))
     # print(df)
-    node = Nodes("Subs", [64669, 82334, 52556])
-    fuse_other_nodes(1, node)
+    # node = Nodes("Subs", [64669, 82334, 52556])
+    # fuse_other_nodes(1, node, sort_sys(LABEL))

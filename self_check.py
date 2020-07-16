@@ -14,17 +14,6 @@
 #                     Last Update : 2020/07/14                      #
 #                                                                   #
 #-------------------------------------------------------------------#
-# Desc:                                                             #
-#    Before running the program, check the accuracy of              #
-#    configuration parameters.                                      #
-#                                                                   #
-# Classes:                                                          #
-#    CheckError-Exception used for this script                      #
-#                                                                   #
-# Functions:                                                        #
-#    Check-Function to do the check work                            #
-#                                                                   #
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 """
 import pandas as pd
 from numpy import nan
