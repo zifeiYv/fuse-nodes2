@@ -19,11 +19,6 @@
 # 4. 执行融合命令
 4.1 融合的入口为`run_cmd.py`脚本，以命令行参数的形式传入生成的融合图的标签，基本用法如下：
 ```python
- python run_cmd.py --new-label xxxx
+ python run_cmd.py 
 ```
-    
-`xxxx`为标签名称。
 
-另外，可以执行`python run_cmd.py -h`查看帮助。
-
-如果待融合图较大，那么可以指定`--multi`参数为`1`，启动多进程来加速运算（测试中，可能出现意料之外的错误，默认为关闭）。
