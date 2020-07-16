@@ -1,39 +1,50 @@
 # -*- coding: utf-8 -*-
 """
-@Time   : 2020/6/28 10:55 上午
-@Author : sunjiawei
-@E-mail : j.w.sun1992@gmail.com
+#-------------------------------------------------------------------#
+#                    Project Name : 实体融合                         #
+#                                                                   #
+#                       File Name : self_check.py                   #
+#                                                                   #
+#                          Author : Jiawei Sun                      #
+#                                                                   #
+#                          Email : j.w.sun1992@gmail.com            #
+#                                                                   #
+#                      Start Date : 2020/07/16                      #
+#                                                                   #
+#                     Last Update : 2020/07/16                      #
+#                                                                   #
+#-------------------------------------------------------------------#
 """
-import pickle
-from self_test import check
-from subgraphs import delete_old
-import os
+from self_check import check
+from trie import Nodes
+from tqdm import tqdm
+FUSE_AND_CREATE = True  # 融合一个子图，创建一个子图
 
 
 if __name__ == '__main__':
-    print("Checking config files...")
+    print("必要的检查...")
     check()
-    print("Everything goes well\n")
-    print("Deleting old results...")
-    delete_old('merge')
-    print("Finish delete\n")
+    print("一切正常\n")
 
-    with open('./config_files/application.cfg') as f:
-        cfg.read_file(f)
-    processes = cfg.getint('distributed', 'processes')
-    if not processes:
-        processes = os.cpu_count()
-    print("Fusing started")
-    from utils import fuse_root_nodes
-    root_results = fuse_root_nodes(multi, processes)
-    if root_results is None:
-        print("Foot nodes have not fuse results")
-    if multi:
-        inputs = [[label, root_results[i], i, len(root_results)] for i in range(len(root_results))]
-        with open('./inputs.pkl', 'wb') as f:
-            pickle.dump(inputs, f)
-        os.popen('nohup python multiprocess.py > multi.out 2>&1 &')  # 标准错误重定向至标准输出，不适合windows操作系统
+    print("开始融合")
+    from fuse import fuse_root_nodes, fuse_other_nodes, \
+        sort_sys, LABEL, PRO, create_node_and_rel, delete_old
+
+    print("删除旧的融合结果...")
+    delete_old('merge')
+    print("删除完成\n")
+
+    root_res_df = fuse_root_nodes(LABEL, PRO)
+    if root_res_df is None:
+        print("根节点融合后无结果，无法继续执行")
     else:
-        from utils import fuse_and_create
-        for i in range(len(root_results)):
-            fuse_and_create((label, root_results[i], i, len(root_results)))
+        print("根节点融合完成，开始融合子图")
+        sorted_sys = sort_sys(LABEL)
+        base_ent_lab = LABEL[sorted_sys[min(sorted_sys)]].iloc[0]
+        for i in tqdm(range(len(root_res_df))):
+            print(root_res_df.iloc[i].to_list())
+            node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
+            fuse_other_nodes(1, node, sorted_sys)  # 执行之后，node包含了创建一个子图所需要的完整信息
+            if FUSE_AND_CREATE:
+                create_node_and_rel(node)
+        print("创建新图完成")

@@ -62,7 +62,7 @@ def check():
             raise CheckError(f"`{df}`与`label`中的系统名称不符")
 
     for s in sys_labels:
-        if label[s].value_counts().sum() != rel[s].value_counts()[0] + 1:
+        if label[s].value_counts().sum() != rel[s].value_counts().sum() + 1:
             raise CheckError(f"系统`{s}`的实体类别数量与关系数量不匹配")
         if label[s].value_counts().sum() != pro[s].value_counts().sum():
             raise CheckError(f"系统`{s}`可用于融合计算的属性数量与实体类别数量不匹配")
@@ -85,7 +85,7 @@ def check():
     except Exception as e:
         raise CheckError(e)
 
-    try:
-        connect(**eval(mysql))
-    except Exception as e:
-        raise CheckError(e)
+    # try:
+    #     connect(**eval(mysql))
+    # except Exception as e:
+    #     raise CheckError(e)

@@ -17,12 +17,14 @@
 
 问题记录：
     - 嵌套递归的效率问题。
-    -
+    - 按照当前的处理逻辑，基准系统的的一级实体必须存在，否则会处理出错。
+      出错代码在``fuse_root_nodes``中，变量`base_ent_lab`的值会变为`np.nan`。这是由于基准系统选择算法
+      只考虑了该系统纳入融合计算的所有的实体类别的数量，并未考察一级实体是否有值。应该修改基准系统选择算法。
 
 """
 import pandas as pd
 import numpy as np
-from py2neo import Graph
+from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
 from text_sim_utils import sims
 from trie import Nodes
@@ -156,7 +158,8 @@ def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
     label_df = LABEL.copy()
 
     # 先基于父实体的id，对其直接子节点进行完全融合
-    df = fuse_in_same_level(label_df, node.value, start_index)
+    root = node.value
+    df = fuse_in_same_level(label_df, root, start_index)
 
     if df is None:
         return
@@ -466,12 +469,104 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
         return no_similarity(base_data, base_sys)
     df = combine_sim(similarities, base_sys)
     label_df = label_df.drop(base_sys, axis=1)
-    root_results.pop(systems.index(base_sys))
-    return df.append(fuse_in_same_level(label_df, root_results, start_index, not_extract))
+    root_results_bak = root_results.copy()
+    root_results_bak.pop(systems.index(base_sys))
+    return df.append(fuse_in_same_level(label_df, root_results_bak, start_index, not_extract))
 
+
+def create_node_and_rel(node):
+    """对于一个包含子图所有信息的node，将子图生成到Neo4j中去。
+
+    Args:
+        node(Nodes): 一个`trie.Nodes`对象
+
+    Returns:
+
+    """
+    graph = Graph(neo4j_url, auth=auth)
+    tx = graph.begin()
+    root_node = create_node(node.value, node.label, 0)
+    # tx.create(root_node)
+
+    def func(p_node: Node, nodes: Nodes, i: int):
+        """一个递归调用的函数。
+
+        Args:
+            p_node: 一个`py2neo.Node`对象
+            nodes: 一个`trie.Nodes`对象
+            i: 记录层级
+
+        Returns:
+
+        """
+        if isinstance(nodes, list):
+            return
+        data = nodes.children
+        for j in data:  # j也是一个`trie.Nodes`对象
+            node_ = create_node(j.value, j.label, i)
+            rel = j.rel
+            tx.create(Relationship(p_node, rel, node_))
+            if not j.children:
+                continue
+            else:  # node_存在子节点，因此递归调用
+                k = i + 1
+                nodes = j.children
+                func(node_, nodes, k)
+
+    func(root_node, node, 1)
+    tx.commit()
+
+
+def create_node(value: list, label: str, level: int):
+    """根据融合结果的列表与配置文件中的迁移属性内容，创建新的节点对象。
+
+    Args:
+        value: 融合后的节点在各个系统中的值的列表，长度等于系统的数量
+        label: 融合后的实体的标签，需要与`merge`合并为多标签
+        level: 第几级实体
+
+    Returns:
+        一个`py2neo.Node`对象
+
+    """
+    assert len(value) == LABEL.shape[1]
+    data = {}
+    graph = Graph(neo4j_url, auth=auth)
+    sorted_sys = sort_sys(LABEL)
+    tran_pros = set()
+    for i, v in enumerate(value):
+        if np.isnan(v):
+            continue
+        v = int(v)
+        data[f'{sorted_sys[i]}Id'] = v
+        pros = TRANS[sorted_sys[i]].iloc[level].split(',')  # 某个系统、某个级别实体的迁移属性列表
+        for p in pros:
+            if p in tran_pros:  # 已有其他系统的属性被迁移
+                continue
+            else:
+                val = graph.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
+                if val:
+                    tran_pros.add(p)
+                    data[f'{p}'] = val
+    return Node(*[label, 'merge'], **data)
+
+
+def delete_old(label):
+    """Delete ole fuse results.
+
+    Args:
+        label(str): Node label
+
+    Returns:
+
+    """
+    graph = Graph(neo4j_url, auth=auth)
+    graph.run(f"match (n:`{label}`)-[r]-() delete r")
+    graph.run(f"match (n:`{label}`) delete n")
 
 # if __name__ == '__main__':
     # df = fuse_root_nodes(LABEL, PRO, sort_sys(LABEL))
     # print(df)
     # node = Nodes("Subs", [64669, 82334, 52556])
-    # fuse_other_nodes(1, node, sort_sys(LABEL))
+    # # fuse_other_nodes(1, node, sort_sys(LABEL))
+    # print(create_node(node.value, 'Subs', 0))

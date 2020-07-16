@@ -127,10 +127,10 @@ def sims(string1, string2, methods=None) -> float:
         Similarity value
     """
     if not isinstance(string1, str):
-        debug_logger.warning(f'{string1} is not str')
+        # debug_logger.warning(f'{string1} is not str')
         return 0
     if not isinstance(string2, str):
-        debug_logger.warning(f'{string2} is not str')
+        # debug_logger.warning(f'{string2} is not str')
         return 0
     sim = 0
     if not methods:
