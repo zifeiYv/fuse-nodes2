@@ -80,7 +80,8 @@ def sort_sys(label_df) -> dict:
     order, res = {}, {}
     for col in label_df.columns:
         _str = ['0' if isinstance(i, float) else '1' for i in label_df[col]]
-        order[int("".join(_str), 2)] = col
+        order[col] = int("".join(_str), 2)
+    sorted_order = sorted(order.items(), key=lambda x: x[1], reverse=True)
     for i in range(len(order)):
-        res[i] = order[sorted(order, reverse=True)[i]]
+        res[i] = sorted_order[i][0]
     return res

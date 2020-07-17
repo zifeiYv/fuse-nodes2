@@ -15,9 +15,6 @@
 #                                                                   #
 #-------------------------------------------------------------------#
 """
-import Levenshtein as Lvst
-import numpy as np
-import jieba
 import logging
 
 debug_logger = logging.getLogger(__file__)
@@ -33,6 +30,7 @@ def lvst_dis(string1, string2) -> float:
     Returns:
         Similarity value
     """
+    import Levenshtein as Lvst
     dis = Lvst.distance(string1, string2)
     return 1 - dis / max(len(string1), len(string2))
 
@@ -72,6 +70,9 @@ def cosine_sim(string1, string2) -> float:
     Returns:
         Similarity value
     """
+    import numpy as np
+    import jieba
+
     # 分词
     cut1 = jieba.cut(string1)
     cut2 = jieba.cut(string2)

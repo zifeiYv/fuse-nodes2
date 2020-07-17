@@ -47,7 +47,7 @@ threshold = float(cfg.get('threshold', 'threshold'))
 BASE_SYS_ORDER = sort_sys(LABEL)
 
 
-def fuse_root_nodes(label: pd.DataFrame, base_order=0, not_extract=None):
+def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
     """对根节点进行融合。
 
     根节点指的是各个系统中的第一个实体类，为了加快融合速度，应该增加额外的信息以
@@ -98,9 +98,17 @@ def fuse_root_nodes(label: pd.DataFrame, base_order=0, not_extract=None):
     # 获取基准系统的信息
     if not_extract is None:
         not_extract = {}
+    if label is None:
+        label = LABEL
     base_sys_lab = BASE_SYS_ORDER[base_order]
-    base_ent_lab = label[base_sys_lab].iloc[0]
-    base_pros = PRO[base_sys_lab].iloc[0].split(',')
+    level_num = 0
+    while True:
+        base_ent_lab = label[base_sys_lab].iloc[level_num]
+        if isinstance(base_ent_lab, str):
+            break
+        else:
+            level_num += 1
+    base_pros = PRO[base_sys_lab].iloc[level_num].split(',')
     # 获取基准系统的数据
     base_data = get_data(base_sys_lab, base_ent_lab,
                          base_pros, not_extract.get(base_sys_lab))
@@ -114,8 +122,14 @@ def fuse_root_nodes(label: pd.DataFrame, base_order=0, not_extract=None):
     similarities = {}
     tar_sys_labs = [BASE_SYS_ORDER[i] for i in BASE_SYS_ORDER if i > base_order]
     for tar_sys_lab in tar_sys_labs:
-        tar_ent_lab = label[tar_sys_lab].iloc[0]
-        tar_pros = PRO[tar_sys_lab].iloc[0].split(',')
+        level_num = 0
+        while True:
+            tar_ent_lab = label[tar_sys_lab].iloc[level_num]
+            if isinstance(tar_ent_lab, str):
+                break
+            else:
+                level_num += 1
+        tar_pros = PRO[tar_sys_lab].iloc[level_num].split(',')
         tar_data = get_data(tar_sys_lab, tar_ent_lab,
                             tar_pros, not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
@@ -475,8 +489,7 @@ def create_node_and_rel(node):
     """
     graph = Graph(neo4j_url, auth=auth)
     tx = graph.begin()
-    root_node = create_node(node.value, node.label, 0)
-    # tx.create(root_node)
+    root_node = create_node(tx, node.value, node.label, 0)
 
     def func(p_node: Node, nodes: Nodes, i: int):
         """一个递归调用的函数。
@@ -493,7 +506,7 @@ def create_node_and_rel(node):
             return
         data = nodes.children
         for j in data:  # j也是一个`trie.Nodes`对象
-            node_ = create_node(j.value, j.label, i)
+            node_ = create_node(tx, j.value, j.label, i)
             rel = j.rel
             tx.create(Relationship(p_node, rel, node_))
             if not j.children:
@@ -507,10 +520,11 @@ def create_node_and_rel(node):
     tx.commit()
 
 
-def create_node(value: list, label: str, level: int):
+def create_node(tx, value: list, label: str, level: int):
     """根据融合结果的列表与配置文件中的迁移属性内容，创建新的节点对象。
 
     Args:
+        tx: 一个图数据库的事务
         value: 融合后的节点在各个系统中的值的列表，长度等于系统的数量
         label: 融合后的实体的标签，需要与`merge`合并为多标签
         level: 第几级实体
@@ -521,20 +535,18 @@ def create_node(value: list, label: str, level: int):
     """
     assert len(value) == LABEL.shape[1]
     data = {}
-    graph = Graph(neo4j_url, auth=auth)
-    sorted_sys = sort_sys(LABEL)
     tran_pros = set()
     for i, v in enumerate(value):
         if np.isnan(v):
             continue
         v = int(v)
-        data[f'{sorted_sys[i]}Id'] = v
-        pros = TRANS[sorted_sys[i]].iloc[level].split(',')  # 某个系统、某个级别实体的迁移属性列表
+        data[f'{BASE_SYS_ORDER[i]}Id'] = v
+        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level].split(',')  # 某个系统、某个级别实体的迁移属性列表
         for p in pros:
             if p in tran_pros:  # 已有其他系统的属性被迁移
                 continue
             else:
-                val = graph.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
+                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
                 if val:
                     tran_pros.add(p)
                     data[f'{p}'] = val
