@@ -27,7 +27,7 @@ import numpy as np
 from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
 from text_sim_utils import sims
-from trie import Nodes
+from utils import Nodes, sort_sys
 
 format_ = pd.read_excel('./config_files/format.xlsx',
                         sheet_name=['label', 'rel', 'pro', 'trans'], index_col=0)
@@ -44,19 +44,10 @@ neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
 
-
-def sort_sys(label: pd.DataFrame) -> dict:
-    """根据配置文件的系统与实体标签，计算其中的基准系统，按照顺序进行排列"""
-    res = {}
-    label_bak = label.copy()
-    for i in range(label.shape[1]):
-        lab = label_bak.columns.values[label_bak.count().argmax()]
-        res[i] = lab
-        label_bak.drop(lab, axis=1, inplace=True)
-    return res
+BASE_SYS_ORDER = sort_sys(LABEL)
 
 
-def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
+def fuse_root_nodes(label: pd.DataFrame, base_order=0, not_extract=None):
     """对根节点进行融合。
 
     根节点指的是各个系统中的第一个实体类，为了加快融合速度，应该增加额外的信息以
@@ -68,7 +59,7 @@ def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
     假设有5个系统需要融合：
               | sys1 | sys2 | sys3 | sys4 | sys5 |
         ------|------|------|------|------|------|
-        1级实体| Ent  | Ent  | Ent  | Ent  | Ent  |
+        level1| Ent  | Ent  | Ent  | Ent  | Ent  |
         ------|------|------|------|------|------|
         ...
     根节点的融合只需要考察1级实体的标签即可。
@@ -98,19 +89,18 @@ def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
 
     Args:
         label: 记录系统及其包含实体的DataFrame
-        pro: 记录系统及其可供融合利用的实体属性的DataFrame
+        base_order(int): 基准系统的选择顺序，开始时为0
         not_extract(dict): 存储对应系统中不被抽取的节点的id
 
     Returns:
 
     """
-    sort_res = sort_sys(label)
     # 获取基准系统的信息
     if not_extract is None:
         not_extract = {}
-    base_sys_lab = sort_res[min(sort_res)]
+    base_sys_lab = BASE_SYS_ORDER[base_order]
     base_ent_lab = label[base_sys_lab].iloc[0]
-    base_pros = pro[base_sys_lab].iloc[0].split(',')
+    base_pros = PRO[base_sys_lab].iloc[0].split(',')
     # 获取基准系统的数据
     base_data = get_data(base_sys_lab, base_ent_lab,
                          base_pros, not_extract.get(base_sys_lab))
@@ -122,10 +112,10 @@ def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
     # 遍历目标系统，获取相关数据，然后逐个与基准系统进行比对
     # 并将比对的结果存储下来
     similarities = {}
-    tar_sys_labs = list(set(sort_res.values()) - {base_sys_lab})
+    tar_sys_labs = [BASE_SYS_ORDER[i] for i in BASE_SYS_ORDER if i > base_order]
     for tar_sys_lab in tar_sys_labs:
         tar_ent_lab = label[tar_sys_lab].iloc[0]
-        tar_pros = pro[tar_sys_lab].iloc[0].split(',')
+        tar_pros = PRO[tar_sys_lab].iloc[0].split(',')
         tar_data = get_data(tar_sys_lab, tar_ent_lab,
                             tar_pros, not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
@@ -137,7 +127,7 @@ def fuse_root_nodes(label: pd.DataFrame, pro: pd.DataFrame, not_extract=None):
         return no_similarity(base_data, base_sys_lab)
     df = combine_sim(similarities, base_sys_lab)
     label = label.drop(base_sys_lab, axis=1)
-    return df.append(fuse_root_nodes(label, pro, not_extract))
+    return df.append(fuse_root_nodes(label, base_order + 1, not_extract))
 
 
 def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
@@ -563,10 +553,3 @@ def delete_old(label):
     graph = Graph(neo4j_url, auth=auth)
     graph.run(f"match (n:`{label}`)-[r]-() delete r")
     graph.run(f"match (n:`{label}`) delete n")
-
-# if __name__ == '__main__':
-    # df = fuse_root_nodes(LABEL, PRO, sort_sys(LABEL))
-    # print(df)
-    # node = Nodes("Subs", [64669, 82334, 52556])
-    # # fuse_other_nodes(1, node, sort_sys(LABEL))
-    # print(create_node(node.value, 'Subs', 0))

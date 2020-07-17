@@ -11,25 +11,9 @@
 #                                                                   #
 #                      Start Date : 2020/07/14                      #
 #                                                                   #
-#                     Last Update :                                 #
+#                     Last Update : 2020/07/14                      #
 #                                                                   #
 #-------------------------------------------------------------------#
-# Desc:                                                             #
-#    Some functions used to compute similarity between two          #
-#    strings.                                                       #
-#                                                                   #
-# Classes:                                                          #
-#    UnNormalizedWeight-Exception will be raised when weigh is not  #
-#         correct.                                                  #
-#                                                                   #
-# Functions:                                                        #
-#    lvst_dis-Edit distance                                         #
-#    lcs-Longest common string distance                             #
-#    cosine_sim-Cosine distance                                     #
-#    sims-Combine the three distance above and assign specific      #
-#         weights                                                   #
-#                                                                   #
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 """
 import Levenshtein as Lvst
 import numpy as np

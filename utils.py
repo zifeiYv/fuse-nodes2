@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------#
 #                    Project Name : 实体融合                         #
 #                                                                   #
-#                       File Name : trie.py                         #
+#                       File Name : utils.py                         #
 #                                                                   #
 #                          Author : Jiawei Sun                      #
 #                                                                   #
@@ -11,7 +11,7 @@
 #                                                                   #
 #                      Start Date : 2020/07/15                      #
 #                                                                   #
-#                     Last Update :                                 #
+#                     Last Update : 2020/07/17                      #
 #                                                                   #
 #-------------------------------------------------------------------#
 """
@@ -50,3 +50,34 @@ class Nodes:
 
         """
         self.children.append(node)
+
+
+def sort_sys(label_df) -> dict:
+    """根据配置文件的系统与实体标签，计算其中的基准系统，按照顺序进行排列。
+
+    目前，这种方式是考虑不周的。如果出现以下情况：
+
+              | sys1 | sys2 | sys3 |
+        ------|------|------|------|
+        level1|      | Ent  |      |
+        ------|------|------|------|
+        level2| Ent  | Ent  | Ent  |
+        ------|------|------|------|
+        level3| Ent  |      |      |
+        ------|------|------|------|
+        level4| Ent  |      |      |
+        ------|------|------|------|
+    那么，当前的方法选择的基准系统顺序为：[sys1, sys2, sys3]。在这个基础上，
+    因为指定了实体标签的行索引值为0，所以在进行根节点融合时会因选择了NaN值而
+    出错。
+
+    对于上述情况，正确的识别顺序应该是：[sys2, sys1, sys3]。
+
+    """
+    res = {}
+    label_bak = label_df.copy()
+    for i in range(label_df.shape[1]):
+        lab = label_bak.columns.values[label_bak.count().argmax()]
+        res[i] = lab
+        label_bak.drop(lab, axis=1, inplace=True)
+    return res

@@ -16,7 +16,7 @@
 #-------------------------------------------------------------------#
 """
 from self_check import check
-from trie import Nodes
+from utils import Nodes
 from tqdm import tqdm
 FUSE_AND_CREATE = True  # 融合一个子图，创建一个子图
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     delete_old('merge')
     print("删除完成\n")
 
-    root_res_df = fuse_root_nodes(LABEL, PRO)
+    root_res_df = fuse_root_nodes(LABEL)
     if root_res_df is None:
         print("根节点融合后无结果，无法继续执行")
     else:
