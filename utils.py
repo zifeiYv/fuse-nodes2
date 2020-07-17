@@ -73,11 +73,14 @@ def sort_sys(label_df) -> dict:
 
     对于上述情况，正确的识别顺序应该是：[sys2, sys1, sys3]。
 
+    commit: 已解决上述问题，将每一列看成一个二进制数字，非NaN值写成1，NaN值写成0，
+    只需要比较二进制数字的大小即可。
+
     """
-    res = {}
-    label_bak = label_df.copy()
-    for i in range(label_df.shape[1]):
-        lab = label_bak.columns.values[label_bak.count().argmax()]
-        res[i] = lab
-        label_bak.drop(lab, axis=1, inplace=True)
+    order, res = {}, {}
+    for col in label_df.columns:
+        _str = ['0' if isinstance(i, float) else '1' for i in label_df[col]]
+        order[int("".join(_str), 2)] = col
+    for i in range(len(order)):
+        res[i] = order[sorted(order, reverse=True)[i]]
     return res
