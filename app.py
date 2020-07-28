@@ -51,6 +51,13 @@ def func():
         pass
     elif float(str(r.get('progress'), 'utf-8')) not in (1.0, 0.0):
         return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
+    print("必要的检查...")
+    try:
+        check()
+    except Exception as e:
+        print('ERROR:', e)
+        return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
+    print("一切正常")
     executor.submit(main_fuse)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
@@ -68,15 +75,12 @@ def initialize():
 
 
 def main_fuse():
-    print("必要的检查...")
-    check()
-    print("一切正常\n")
     from fuse import fuse_root_nodes, fuse_other_nodes, BASE_SYS_ORDER, LABEL, \
         create_node_and_rel, delete_old
     print("开始融合")
     print("删除旧的融合结果...")
     delete_old('merge')
-    print("删除完成\n")
+    print("删除完成")
 
     root_res_df = fuse_root_nodes()
     if root_res_df is None:
