@@ -194,9 +194,9 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
     graph = Graph(neo4j_url, auth=auth)
     if isinstance(pro, str):
         pro = [pro]
-    cypher = f'match (n:{system}:{ent_lab}) return id(n) as id_, n.'
+    cypher = f'match (n:{system}:{ent_lab}) return id(n) as id_, '
     for p in pro:
-        cypher += p + f' as {p}, '
+        cypher += 'n.' + p + f' as {p}, '
     cypher = cypher[:-2]
     data = graph.run(cypher).data()
     return [i for i in data if i['id_'] not in not_extract]
