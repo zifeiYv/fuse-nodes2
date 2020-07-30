@@ -85,12 +85,3 @@ def sort_sys(label_df) -> dict:
     for i in range(len(order)):
         res[i] = sorted_order[i][0]
     return res
-
-
-class R:
-    """如果没有安装redis环境或者配置错误导致无法连接，那么则实例化这个类，以避免进度条不可用时相关方法报错"""
-    def get(self, name):
-        pass
-
-    def set(self, name, value):
-        pass

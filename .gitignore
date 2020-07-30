@@ -6,3 +6,4 @@ multi.out
 build/
 *.so
 *.c
+progressbar.db
