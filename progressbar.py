@@ -28,11 +28,14 @@ class ProgressBar:
     def __init__(self, bar_name):
         assert isinstance(bar_name, str), '必须传入字符型的进度条名称！'
         self.table = bar_name
-        self.db = db_filename
-        self.conn = sqlite3.connect(self.db)
+        self.conn = sqlite3.connect(db_filename)
 
     def create(self):
-        """创建一个进度条，即在数据库中创建对应表"""
+        """创建一个进度条，即在数据库中创建对应表。
+
+        如果在不同的脚本中查询进度条，则不应该调用本方法。本方法会导致同名进度条的进度数据消失，
+        在程序被非正常终止时可以利用本方法进行重置。
+        """
         try:
             self.conn.execute(f'''
                 create table {self.table} (
