@@ -66,7 +66,7 @@ def main_fuse():
     print("删除旧的融合结果...")
     delete_old('merge')
     print("删除完成")
-
+    print("正在融合根节点")
     root_res_df = fuse_root_nodes()
     if root_res_df is None:
         print("根节点融合后无结果，无法继续执行")

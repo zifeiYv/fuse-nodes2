@@ -28,7 +28,7 @@ class ProgressBar:
     def __init__(self, bar_name):
         assert isinstance(bar_name, str), '必须传入字符型的进度条名称！'
         self.table = bar_name
-        self.conn = sqlite3.connect(db_filename)
+        self.conn = sqlite3.connect(db_filename, check_same_thread=False)
 
     def create(self):
         """创建一个进度条，即在数据库中创建对应表。
