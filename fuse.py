@@ -11,7 +11,7 @@
 #                                                                   #
 #                      Start Date : 2020/07/14                      #
 #                                                                   #
-#                     Last Update :                                 #
+#                     Last Update : 2020/08/06                      #
 #                                                                   #
 #-------------------------------------------------------------------#
 
@@ -28,15 +28,14 @@ from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
 from text_sim_utils import sims
 from utils import Nodes, sort_sys
+from self_check import get_paras
+from progressbar import ProgressBar
 
-format_ = pd.read_excel('./config_files/format.xlsx',
-                        sheet_name=['label', 'rel', 'pro', 'trans'], index_col=0)
-LABEL, REL, PRO, TRANS = format_.values()
-LABEL.replace(r'^\s+$', np.nan, regex=True, inplace=True)
-REL.replace(r'^\s+$', np.nan, regex=True, inplace=True)
-PRO.replace(r'^\s+$', np.nan, regex=True, inplace=True)
-TRANS.replace(r'^\s+$', np.nan, regex=True, inplace=True)
+FUSE_AND_CREATE = True  # 融合完成一个子图，便在Neo4j中创建一个子图
+bar = ProgressBar('sub_graph')
 
+LABEL, REL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+BASE_SYS_ORDER = {}
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
     cfg.read_file(f)
@@ -44,7 +43,29 @@ neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
 
-BASE_SYS_ORDER = sort_sys(LABEL)
+
+def main_fuse(task_id):
+    global LABEL, REL, PRO, TRANS, BASE_SYS_ORDER
+    LABEL, PRO, TRANS, REL = get_paras(task_id)
+    BASE_SYS_ORDER = sort_sys(LABEL)
+    print("开始融合")
+    print("删除旧的融合结果...")
+    delete_old('merge')
+    print("删除完成")
+    print("正在融合根节点")
+    root_res_df = fuse_root_nodes()
+    if root_res_df is None:
+        print("根节点融合后无结果，无法继续执行")
+    else:
+        print("根节点融合完成，开始融合子图")
+        base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
+        for i in range(len(root_res_df)):
+            bar.set((i + 1)/len(root_res_df))
+            node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
+            fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
+            if FUSE_AND_CREATE:
+                create_node_and_rel(node)
+        print("创建新图完成")
 
 
 def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):

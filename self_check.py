@@ -11,7 +11,7 @@
 #                                                                   #
 #                      Start Date : 2020/07/14                      #
 #                                                                   #
-#                     Last Update : 2020/07/14                      #
+#                     Last Update : 2020/08/06                      #
 #                                                                   #
 #-------------------------------------------------------------------#
 """
@@ -21,28 +21,30 @@ from py2neo import Graph
 from pymysql import connect
 from configparser import ConfigParser
 
-format_ = pd.read_excel('./config_files/format.xlsx', sheet_name=['label', 'rel', 'pro', 'trans'],
-                        index_col=0)
 
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
-mysql = cfg.get('mysql', 'mysql')
+mysql_cfg = cfg.get('mysql', 'mysql_cfg')
+mysql_res = cfg.get('mysql', 'mysql_res')
 
 
 class CheckError(Exception):
     pass
 
 
-def check():
+def check(task_id):
     """用于检查参数有效性的函数"""
-    label, rel, pro, trans = format_.values()  # Extract four data frames
-    label.replace(r'^\s+$', nan, regex=True, inplace=True)
-    rel.replace(r'^\s+$', nan, regex=True, inplace=True)
-    pro.replace(r'^\s+$', nan, regex=True, inplace=True)
-    trans.replace(r'^\s+$', nan, regex=True, inplace=True)
+    # 数据库连接是否正常
+    for i in (mysql_res, mysql_cfg):
+        try:
+            connect(**eval(i))
+        except Exception as e:
+            raise CheckError(e)
+
+    label, pro, trans, rel = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
@@ -85,7 +87,36 @@ def check():
     except Exception as e:
         raise CheckError(e)
 
-    # try:
-    #     connect(**eval(mysql))
-    # except Exception as e:
-    #     raise CheckError(e)
+
+def get_paras(task_id):
+    """从关系型数据库获取参数，并处理成DataFrame的形式返回给``check()``进行调用"""
+    try:
+        conn = connect(**eval(mysql_cfg))
+    except Exception as e:
+        raise CheckError(e)
+    with conn.cursor() as cr:
+        cr.execute(f"select id, system_label, entity_label, pros_for_fuse, pros_for_transfer, "
+                   f"entity_level from fuse_config_table1 where task_id='{task_id}'")
+        info = cr.fetchall()
+        cr.execute(f"select from_id, to_id, rel_label from fuse_config_table2 "
+                   f"where task_id='{task_id}'")
+        info2 = cr.fetchall()
+    num_rows = max([i[-1] for i in info])
+    columns = list(set([i[1] for i in info]))
+    label = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
+    pro = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
+    trans = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
+    rel = pd.DataFrame(data=nan, index=range(num_rows-1), columns=columns)
+    for c in columns:
+        for t in info:
+            if t[1] != c:
+                continue
+            else:
+                label.loc[t[-1]-1, c] = t[2]
+                pro.loc[t[-1]-1, c] = t[3]
+                trans.loc[t[-1]-1, c] = t[4]
+                for t2 in info2:
+                    if t2[0] == t[0]:
+                        rel.loc[t[-1]-1, c] = t2[2]
+
+    return label, pro, trans, rel
