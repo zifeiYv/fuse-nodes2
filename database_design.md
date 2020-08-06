@@ -46,6 +46,26 @@ CREATE TABLE `fuse_config_table2` (
 SET FOREIGN_KEY_CHECKS = 1;
 ```
 
+存储融合结果的表为`fuse_result_table`，其结构如下：
+```sql
+-- ----------------------------
+-- Table structure for fuse_result_table
+-- ----------------------------
+DROP TABLE IF EXISTS `fuse_result_table`;
+CREATE TABLE `fuse_result_table` (
+  `id` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '主键',
+  `task_id` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT '任务的id',
+  `subgraph_id` int DEFAULT NULL COMMENT '子图的id，在每个任务中是从1开始自增长的',
+  `entity_type` varchar(8) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT '实体的类别标签',
+  `value` varchar(32) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT '记录原始实体的id，由英文逗号连接',
+  `sorted_sys` varchar(32) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT '记录系统选择的顺序',
+  `run_time` datetime DEFAULT NULL COMMENT '执行时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+SET FOREIGN_KEY_CHECKS = 1;
+```
+
 ## 2.2 表说明
 ### 2.2.1 `fuse_config_table1`
 
@@ -63,6 +83,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 ### 2.2.2 `fuse_config_table2`
 
 对于一个待融合的系统而言，如果存在多个需要融合的实体类，那么必须定义实体类之间的关系。注意，实体类之间的关系总是由低级指向高级的（1级实体指向2级实体）。
+
+### 2.2.3 `fuse_result_table`
+
+执行完成一个融合任务之后，在将融合结果生成至图数据库之前，需要将结果保存在关系型数据库中。
 
 # 3、配置文件
 为了获取参数，需要指定参数表所在的数据库。限定数据库的类型为MySQL，其连接信息在`./config_files/applicaiton.cfg`中定义，section为`mysql`，option为`mysql_cfg`。

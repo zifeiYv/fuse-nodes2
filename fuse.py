@@ -30,8 +30,10 @@ from text_sim_utils import sims
 from utils import Nodes, sort_sys
 from self_check import get_paras
 from progressbar import ProgressBar
+from pymysql import connect
+from time import strftime
+from uuid import uuid1
 
-FUSE_AND_CREATE = True  # 融合完成一个子图，便在Neo4j中创建一个子图
 bar = ProgressBar('sub_graph')
 
 LABEL, REL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -42,6 +44,7 @@ with open('./config_files/application.cfg') as f:
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
+mysql_res = cfg.get('mysql', 'mysql_res')
 
 
 def main_fuse(task_id):
@@ -63,8 +66,8 @@ def main_fuse(task_id):
             bar.set((i + 1)/len(root_res_df))
             node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
             fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
-            if FUSE_AND_CREATE:
-                create_node_and_rel(node)
+            save_node_to_mysql(task_id, node)
+            create_node_and_rel(node)
         print("创建新图完成")
 
 
@@ -586,3 +589,21 @@ def delete_old(label):
     graph = Graph(neo4j_url, auth=auth)
     graph.run(f"match (n:`{label}`)-[r]-() delete r")
     graph.run(f"match (n:`{label}`) delete n")
+
+
+def save_node_to_mysql(task_id: str, node: Nodes):
+    """将融合后的一个子图对象存储至mysql中。"""
+    conn = connect(**eval(mysql_res))
+    sorted_sys = ",".join([BASE_SYS_ORDER[i] for i in range(len(BASE_SYS_ORDER))])
+    now = strftime("%Y-%m-%d %H:%M:%S")
+
+    def insert(n: Nodes, sid=1):
+        with conn.cursor() as cr:
+            values = (str(uuid1()), task_id, sid, node.label, ",".join(map(str, node.value)),
+                      sorted_sys, now)
+            cr.execute(f"insert into fuse_result_table values ({values})")
+            for n_ in n.children:
+                sid += 1
+                insert(n_, sid)
+
+    insert(node)
