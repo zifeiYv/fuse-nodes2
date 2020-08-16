@@ -11,12 +11,11 @@
 #                                                                   #
 #                      Start Date : 2020/07/14                      #
 #                                                                   #
-#                     Last Update : 2020/08/06                      #
+#                     Last Update : 2020/08/15                      #
 #                                                                   #
 #-------------------------------------------------------------------#
 """
 import pandas as pd
-from numpy import nan
 from py2neo import Graph
 from pymysql import connect
 from configparser import ConfigParser
@@ -44,7 +43,7 @@ def check(task_id):
         except Exception as e:
             raise CheckError(e)
 
-    label, pro, trans, rel = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
+    label, pro, trans = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
@@ -64,8 +63,6 @@ def check(task_id):
             raise CheckError(f"`{df}`与`label`中的系统名称不符")
 
     for s in sys_labels:
-        if label[s].value_counts().sum() != rel[s].value_counts().sum() + 1:
-            raise CheckError(f"系统`{s}`的实体类别数量与关系数量不匹配")
         if label[s].value_counts().sum() != pro[s].value_counts().sum():
             raise CheckError(f"系统`{s}`可用于融合计算的属性数量与实体类别数量不匹配")
         if label[s].value_counts().sum() != trans[s].value_counts().sum():
@@ -95,28 +92,32 @@ def get_paras(task_id):
     except Exception as e:
         raise CheckError(e)
     with conn.cursor() as cr:
-        cr.execute(f"select id, system_label, entity_label, pros_for_fuse, pros_for_transfer, "
-                   f"entity_level from fuse_config_table1 where task_id='{task_id}'")
+        cr.execute(f"select space_label, ontological_label, ontological_weight, "
+                   f"ontological_mapping_column_name from gd_fuse_attribute t where t.fuse_id='"
+                   f"{task_id}'")
         info = cr.fetchall()
-        cr.execute(f"select from_id, to_id, rel_label from fuse_config_table2 "
-                   f"where task_id='{task_id}'")
-        info2 = cr.fetchall()
-    num_rows = max([i[-1] for i in info])
-    columns = list(set([i[1] for i in info]))
-    label = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
-    pro = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
-    trans = pd.DataFrame(data=nan, index=range(num_rows), columns=columns)
-    rel = pd.DataFrame(data=nan, index=range(num_rows-1), columns=columns)
+
+    num_rows = max([i[2] for i in info])
+    columns = list(set([i[0] for i in info]))
+    label = pd.DataFrame(index=range(num_rows), columns=columns)
+    pro = pd.DataFrame(index=range(num_rows), columns=columns)
+    # trans = pd.DataFrame(index=range(num_rows), columns=columns)
+    # rel = pd.DataFrame(data=nan, index=range(num_rows-1), columns=columns)
     for c in columns:
         for t in info:
-            if t[1] != c:
+            if t[0] != c:
                 continue
             else:
-                label.loc[t[-1]-1, c] = t[2]
-                pro.loc[t[-1]-1, c] = t[3]
-                trans.loc[t[-1]-1, c] = t[4]
-                for t2 in info2:
-                    if t2[0] == t[0]:
-                        rel.loc[t[-1]-1, c] = t2[2]
+                if isinstance(label.loc[num_rows-t[2], c], float):  # 说明该位置上尚未有值
+                    label.loc[num_rows-t[2], c] = t[1]
+                else:  # 否则，将新的值追加到原来的值后面，用英文分号分割
+                    label.loc[num_rows-t[2], c] = label.loc[num_rows-t[2], c] + ';' + t[1]
 
-    return label, pro, trans, rel
+                if isinstance(pro.loc[num_rows-t[2], c], float):
+                    pro.loc[num_rows-t[2], c] = t[3]
+                else:
+                    pro.loc[num_rows-t[2], c] = pro.loc[num_rows-t[2], c] + ';' + t[3]
+
+    trans = pro.copy()
+
+    return label, pro, trans

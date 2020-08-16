@@ -36,7 +36,7 @@ from uuid import uuid1
 
 bar = ProgressBar('sub_graph')
 
-LABEL, REL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 BASE_SYS_ORDER = {}
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
@@ -48,8 +48,8 @@ mysql_res = cfg.get('mysql', 'mysql_res')
 
 
 def main_fuse(task_id):
-    global LABEL, REL, PRO, TRANS, BASE_SYS_ORDER
-    LABEL, PRO, TRANS, REL = get_paras(task_id)
+    global LABEL, PRO, TRANS, BASE_SYS_ORDER
+    LABEL, PRO, TRANS = get_paras(task_id)
     BASE_SYS_ORDER = sort_sys(LABEL)
     print("开始融合")
     print("删除旧的融合结果...")
@@ -132,7 +132,7 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
             break
         else:
             level_num += 1
-    base_pros = PRO[base_sys_lab].iloc[level_num].split(',')
+    base_pros = PRO[base_sys_lab].iloc[level_num].split(';')
     # 获取基准系统的数据
     base_data = get_data(base_sys_lab, base_ent_lab,
                          base_pros, not_extract.get(base_sys_lab))
@@ -146,14 +146,11 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
     similarities = {}
     tar_sys_labs = [BASE_SYS_ORDER[i] for i in BASE_SYS_ORDER if i > base_order]
     for tar_sys_lab in tar_sys_labs:
-        level_num = 0
-        while True:
-            tar_ent_lab = label[tar_sys_lab].iloc[level_num]
-            if isinstance(tar_ent_lab, str):
-                break
-            else:
-                level_num += 1
-        tar_pros = PRO[tar_sys_lab].iloc[level_num].split(',')
+        # 获取相同等级的实体
+        tar_ent_lab = label[tar_sys_lab].iloc[level_num]
+        if not isinstance(tar_ent_lab, str):
+            continue
+        tar_pros = PRO[tar_sys_lab].iloc[level_num].split(';')
         tar_data = get_data(tar_sys_lab, tar_ent_lab,
                             tar_pros, not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
@@ -194,7 +191,7 @@ def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
     for i in range(df.shape[0]):
         value = df.iloc[i].to_list()
         label = LABEL[sorted_sys[min(sorted_sys)]].iloc[start_index]
-        rel = REL[sorted_sys[min(sorted_sys)]].iloc[start_index-1]
+        rel = '-[:CONNECT]->'
         child = Nodes(label, value, rel)
         fuse_other_nodes(start_index + 1, child, sorted_sys)
         node.add_child(child)
@@ -205,7 +202,7 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
 
     Args:
         system: 来源系统的标签
-        ent_lab: 待获取数据的实体的标签
+        ent_lab: 待获取数据的实体的标签，如果以英文逗号分割，则表明有多个实体标签处于同一等级
         pro: 待获取实体的属性名称，str、list
         not_extract: 不抽取的节点的id
 
@@ -216,9 +213,14 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
     if not_extract is None:
         not_extract = []
     graph = Graph(neo4j_url, auth=auth)
+    ent_lab = ent_lab.split(',')
     if isinstance(pro, str):
         pro = [pro]
-    cypher = f'match (n:{system}:{ent_lab}) return id(n) as id_, '
+    cypher = f'match (n:{system}) where '
+    for e in ent_lab:
+        cypher += f'n:{e} or '
+    cypher = cypher[:-3]
+    cypher += 'return id(n) as id_, '
     for p in pro:
         cypher += 'n.' + p + f' as {p}, '
     cypher = cypher[:-2]
@@ -244,7 +246,7 @@ def get_data2(system: str, pro, level: int, p_node_id: int, not_extract=None):
     graph = Graph(neo4j_url, auth=auth)
     if isinstance(pro, str):
         pro = [pro]
-    rel = REL[system].iloc[level]  # 父节点到此节点的关系
+    rel = '-[:CONNECT]->'  # 父节点到此节点的关系
     tar_sys = LABEL[system].iloc[level+1]  # 子节点的实体标签
     cypher = f'match (n){rel}(m:`{tar_sys}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
              f'as id_, m.'
