@@ -20,6 +20,7 @@ from flask import Flask, jsonify, request
 from concurrent.futures import ProcessPoolExecutor
 from progressbar import ProgressBar
 from fuse import main_fuse
+import sys
 
 FUSE_AND_CREATE = True  # 融合完成一个子图，便在Neo4j中创建一个子图
 
@@ -42,11 +43,11 @@ def func():
     try:
         check(task_id)
     except Exception as e:
-        print('ERROR:', e)
+        print(__file__, sys._getframe().f_lineno, 'ERROR:', e)
         return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
     print("一切正常")
-    # main_fuse(task_id)
-    executor.submit(main_fuse, task_id)
+    main_fuse(task_id)
+    # executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 

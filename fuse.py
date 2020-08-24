@@ -45,6 +45,7 @@ neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
 mysql_res = cfg.get('mysql', 'mysql_res')
+mysql_cfg = cfg.get('mysql', 'mysql_cfg')
 
 
 def main_fuse(task_id):
@@ -56,18 +57,27 @@ def main_fuse(task_id):
     delete_old('merge')
     print("删除完成")
     print("正在融合根节点")
+    start_time = strftime("%Y-%m-%d %H:%M:%S")
+    mapping, next_batch_no = get_save_mapping(task_id)
+    counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
+    counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     root_res_df = fuse_root_nodes()
     if root_res_df is None:
         print("根节点融合后无结果，无法继续执行")
     else:
+        print("根节点融合完成，将结果写入关系型数据库...")
+
         print("根节点融合完成，开始融合子图")
         base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
         for i in range(len(root_res_df)):
             bar.set((i + 1)/len(root_res_df))
             node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
             fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
-            save_node_to_mysql(task_id, node)
+            a, b = caching(counter_only, counter_all, node)
+            counter_only.append(a)
+            counter_all.append(b)
             create_node_and_rel(node)
+        save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
         print("创建新图完成")
 
 
@@ -228,15 +238,17 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
     return [i for i in data if i['id_'] not in not_extract]
 
 
-def get_data2(system: str, pro, level: int, p_node_id: int, not_extract=None):
+def get_data2(system: str, pro: list, level: int, p_node_id: int, not_extract=None, order=0):
     """根据父节点的id以及实体级别，找到其对应的所有子节点。
 
     Args:
-        system: 来源系统的标签
-        pro: 待获取的实体的属性，str/list
-        level: p_node_id所在的实体级别
+        system: 子实体所在系统/空间的标签
+        pro: 融合子实体所依赖的属性列表
+        level: 子实体的级别
         p_node_id: 父节点的id
         not_extract: 不抽取的节点的id列表
+        order: 如果存在多类实体位于同一级别上，那么按照`order`指定的顺序逐个进行数据获取，
+            最后再合并
 
     Returns:
 
@@ -244,10 +256,10 @@ def get_data2(system: str, pro, level: int, p_node_id: int, not_extract=None):
     if not_extract is None:
         not_extract = []
     graph = Graph(neo4j_url, auth=auth)
-    if isinstance(pro, str):
-        pro = [pro]
+    assert isinstance(pro, list)
     rel = '-[:CONNECT]->'  # 父节点到此节点的关系
-    tar_sys = LABEL[system].iloc[level+1]  # 子节点的实体标签
+    tar_sys = LABEL[system].iloc[level].split(';')
+    tar_sys = tar_sys[order]
     cypher = f'match (n){rel}(m:`{tar_sys}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
              f'as id_, m.'
     for p in pro:
@@ -277,7 +289,7 @@ def compute(base_data, tar_data, not_extract=None):
     if res is np.nan:
         return returned
     for i in res:
-        if i[1] is not None:
+        if i[1] is not None and i[1] is not np.nan:
             returned[base_data[i[0]]['id_']] = tar_data[i[1]]['id_']
             not_extract.append(tar_data[i[1]]['id_'])
         else:
@@ -468,33 +480,53 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
         return None
     if not tar_sys_list:
         return None
-
+    #
     # 获取基准系统数据
-    base_pros = PRO[base_sys].iloc[start_index].split(',')
+    #
+    # 由于可能出现多类实体存在于同一个级别上，例如配电变压器和柱上变压器同属变压器类别
+    # ，那么反映到`LABEL`, `PRO`, `TRANS`的表现就是在某个单元格内的实体标签和属性名
+    # 称之间以英文分号连接。对于这种情况，融合前先将一个单元格内的所有种类的实体的数据
+    # 全部获取到，然后按照相同的方法融合。
+    #
+    base_pros = PRO[base_sys].iloc[start_index].split(';')
     base_p_id = root_results[systems.index(base_sys)]
     if np.isnan(base_p_id):
         return None
-    base_data = get_data2(base_sys, base_pros, start_index - 1, base_p_id,
-                          not_extract.get(base_sys))
-    if not base_data:
-        return None
+    if len(base_pros) > 1:  # 说明出现类多类实体处在同一级别上
+        base_data = []
+        for i in range(len(base_pros)):
+            base_pro = base_pros[i].split(',')
+            base_data.extend(get_data2(base_sys, base_pro, start_index, base_p_id,
+                                       not_extract.get(base_sys), i))
+    else:
+        base_data = get_data2(base_sys, base_pros, start_index, base_p_id,
+                              not_extract.get(base_sys))
+        if not base_data:
+            return None
 
     # 遍历目标系统，获取相关数据，然后逐个与基准系统进行比对
     # 并将比对的结果存储下来
     similarities = {}
     for tar_sys in tar_sys_list:
-        tar_pros = PRO[tar_sys].iloc[start_index].split(',')
+        tar_pros = PRO[tar_sys].iloc[start_index].split(';')
         tar_p_id = root_results[systems.index(tar_sys)]
         if np.isnan(tar_p_id):
             continue
         if not isinstance(labels[systems.index(tar_sys)], str):
             continue
-        tar_data = get_data2(tar_sys, tar_pros, start_index - 1, tar_p_id, not_extract.get(tar_sys))
-        if not tar_data:
-            continue
-        similarities[tar_sys], _not_extract = compute(base_data, tar_data,
-                                                      not_extract.get(tar_sys))
-        not_extract[tar_sys] = _not_extract
+        if len(tar_pros) > 1:  # 说明出现类多类实体处在同一级别上
+            tar_data = []
+            for i in range(len(tar_pros)):
+                tar_pro = tar_pros[i].split(',')
+                tar_data.extend(get_data2(tar_sys, tar_pro, start_index, tar_p_id,
+                                          not_extract.get(tar_sys), i))
+        else:
+            tar_data = get_data2(tar_sys, tar_pros, start_index, tar_p_id, not_extract.get(tar_sys))
+            if not tar_data:
+                continue
+            similarities[tar_sys], _not_extract = compute(base_data, tar_data,
+                                                          not_extract.get(tar_sys))
+            not_extract[tar_sys] = _not_extract
     if not similarities:
         return no_similarity(base_data, base_sys)
     df = combine_sim(similarities, base_sys)
@@ -567,7 +599,7 @@ def create_node(tx, value: list, label: str, level: int):
             continue
         v = int(v)
         data[f'{BASE_SYS_ORDER[i]}Id'] = v
-        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level].split(',')  # 某个系统、某个级别实体的迁移属性列表
+        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level].split(';')  # 某个系统、某个级别实体的迁移属性列表
         for p in pros:
             if p in tran_pros:  # 已有其他系统的属性被迁移
                 continue
@@ -593,19 +625,68 @@ def delete_old(label):
     graph.run(f"match (n:`{label}`) delete n")
 
 
-def save_node_to_mysql(task_id: str, node: Nodes):
-    """将融合后的一个子图对象存储至mysql中。"""
+def get_save_mapping(task_id: str):
+    """获取需要存入关系库的相关数据，包括：
+        - 当前计算的次数
+        - 空间与本体的标签与其唯一标识及其他信息的映射字典
+    """
+    conn = connect(**eval(mysql_cfg))
+    with conn.cursor() as cr:
+        cr.execute(f"select max(`batchNo`) from fuse_result where "
+                   f"fuse_id='{task_id}'")
+        cache = cr.fetchone()[0]
+        next_batch_no = cache + 1 if cache else 1
+
+        cr.execute(f"select space_id, space_label, ontological_id, ontological_name, "
+                   f"ontological_label, ontological_weight, ontological_mapping_column_name "
+                   f"from gd_fuse_attribute t where t.fuse_id = '{task_id}'")
+        info = cr.fetchall()
+    mapping = {}
+    for i in info:
+        mapping[i[1]] = i[0]
+        mapping[i[4]] = [i[2], i[3], i[5], i[6]]
+
+    return mapping, next_batch_no
+
+
+def caching(counter_only: pd.DataFrame, counter_all: pd.DataFrame, node: Nodes, level=0):
+    """对于每一个子图，计算其中的每个空间下的不同本体中的融合统计情况，包括：
+        - 独有的数量
+        - 共有的数量
+    """
+    if node.value.count(None) == len(node.value) - 1:
+        for i in range(len(node.value)):
+            if i is not None:
+                counter_only.iloc[level, i] += 1
+                break
+    else:
+        for i in range(len(node.value)):
+            if i is not None:
+                counter_all.iloc[level, i] += 1
+    if node.children:
+        for n in node.children:
+            a, b = caching(counter_only, counter_all, n, level+1)
+            counter_only.append(a)
+            counter_all.append(b)
+    return counter_only, counter_all
+
+
+def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time):
+    """将融合的统计结果写入关系型数据库"""
     conn = connect(**eval(mysql_res))
-    sorted_sys = ",".join([BASE_SYS_ORDER[i] for i in range(len(BASE_SYS_ORDER))])
-    now = strftime("%Y-%m-%d %H:%M:%S")
-
-    def insert(n: Nodes, sid=1):
-        with conn.cursor() as cr:
-            values = (str(uuid1()), task_id, sid, node.label, ",".join(map(str, node.value)),
-                      sorted_sys, now)
-            cr.execute(f"insert into fuse_result_table values ({values})")
-            for n_ in n.children:
-                sid += 1
-                insert(n_, sid)
-
-    insert(node)
+    end_time = strftime("%Y-%m-%d %H:%M:%S")
+    with conn.cursor() as cr:
+        for i in range(counter_only.shape[0]):
+            for j in range(counter_only.shape[1]):
+                id_ = str(uuid1())
+                space_id = mapping[counter_only.columns[j]]
+                label = LABEL.iloc[i, j]
+                ontological_id, ontological_name, ontological_weight, merge_cols = mapping[label]
+                matched = counter_all.iloc[i, j]
+                only = counter_only.iloc[i, j]
+                sql = f"insert into fuse_result values ('{id_}', '{task_id}', '{space_id}', " \
+                      f"'{ontological_id}', '{ontological_name}', '{label}', " \
+                      f"{ontological_weight}, '{merge_cols}',{matched}, {only}, {next_batch_no}, " \
+                      f"'{start_time}', '{end_time}')"
+                cr.execute(sql)
+    conn.commit()

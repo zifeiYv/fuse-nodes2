@@ -54,7 +54,7 @@ def check(task_id):
     ent_num = label.shape[0]
     print(f"共指定了{ent_num}种实体")
 
-    for df in ['rel', 'pro', 'trans']:
+    for df in ['pro', 'trans']:
         df_ = eval(df)
         if df_.shape[1] != label.shape[1]:
             raise CheckError(f"`{df}`与`label`中的系统数量不符")
