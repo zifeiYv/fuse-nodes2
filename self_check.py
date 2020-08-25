@@ -97,33 +97,37 @@ def get_paras(task_id):
                    f"{task_id}'")
         info = cr.fetchall()
 
-    num_rows = max([i[2] for i in info])
+    # 由于给本体设置的权重不一定是从1开始的连续数字，
+    # 因此需要对权重进行特别的处理后进行排序。
+    weights = list(set([i[2] for i in info]))
+    weights.sort()
+    num_rows = len(weights)
     columns = list(set([i[0] for i in info]))
     label = pd.DataFrame(index=range(num_rows), columns=columns)
     pro = pd.DataFrame(index=range(num_rows), columns=columns)
-    # trans = pd.DataFrame(index=range(num_rows), columns=columns)
-    # rel = pd.DataFrame(data=nan, index=range(num_rows-1), columns=columns)
     for c in columns:
         for t in info:
             if t[0] != c:
                 continue
             else:
-                if isinstance(label.loc[num_rows-t[2], c], float):  # 说明该位置上尚未有值
-                    label.loc[num_rows-t[2], c] = t[1]
+                if isinstance(label.loc[num_rows-weights.index(t[2])-1, c], float):  # 说明该位置上尚未有值
+                    label.loc[num_rows-weights.index(t[2])-1, c] = t[1]
                 else:  # 否则，将新的值追加到原来的值后面，用英文分号分割
                     # todo: 以分号分割并进行后续处理的功能目前尚未完成，因此在此处进行了限制，
                     #   即只如果某两个实体具有相同的权重，那么只会保留最后一个，至于是哪一个，
                     #   是无法确定的。
                     #   下同。
-                    # label.loc[num_rows-t[2], c] = label.loc[num_rows-t[2], c] + ';' + t[1]
-                    label.loc[num_rows-t[2], c] = t[1]
+                    # label.loc[num_rows-weights.index(t[2])-1, c] += label.loc[
+                    # num_rows-weights.index(t[2])-1, c] + ';' + t[1]
+                    label.loc[num_rows-weights.index(t[2])-1, c] = t[1]
 
-                if isinstance(pro.loc[num_rows-t[2], c], float):
-                    pro.loc[num_rows-t[2], c] = t[3]
+                if isinstance(pro.loc[num_rows-weights.index(t[2])-1, c], float):
+                    pro.loc[num_rows-weights.index(t[2])-1, c] = t[3]
                 else:
                     # todo：同上
-                    # pro.loc[num_rows-t[2], c] = pro.loc[num_rows-t[2], c] + ';' + t[3]
-                    pro.loc[num_rows-t[2], c] = t[3]
+                    # pro.loc[num_rows-weights.index(t[2])-1, c] = pro.loc[num_rows-weights.index(
+                    #     t[2])-1, c] + ';' + t[3]
+                    pro.loc[num_rows-weights.index(t[2])-1, c] = t[3]
 
     trans = pro.copy()
 
