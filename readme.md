@@ -23,7 +23,9 @@ https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda3-2020.02-Linux-x8
     2.2 利用`pip`制作依赖包的whl文件，命令为：`pip wheel --wheel-dir=/path/to/wheels -r requirements.txt`
     
     2.3 将存储所有whl文件的文件夹和`requirements.txt`一起上传至目标服务器上，执行安装命令：
-    ```pip install --no-index --find-links=/path/to/your/wheels -r requirements.txt```
+    ```
+    pip install --no-index --find-links=/path/to/your/wheels -r requirements.txt
+    ```
 
 # 3. 参数配置
 1. 需要配置的参数在`./config_files`文件夹内，只有一个文件。在文件中，已经解释了每个参数的含义以及设置方式，按照说明执行即可。
