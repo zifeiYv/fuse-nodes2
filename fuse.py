@@ -46,6 +46,7 @@ graph = Graph(neo4j_url, auth=auth)
 
 
 def main_fuse(task_id):
+    """融合程序的入口"""
     global LABEL, PRO, TRANS, BASE_SYS_ORDER, merged_label
     LABEL, PRO, TRANS, merged_label = get_paras(task_id)
     BASE_SYS_ORDER = sort_sys(LABEL)
@@ -62,8 +63,6 @@ def main_fuse(task_id):
     if root_res_df is None:
         print("根节点融合后无结果，无法继续执行")
     else:
-        print("根节点融合完成，将结果写入关系型数据库...")
-
         print("根节点融合完成，开始融合子图")
         base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
         for i in range(len(root_res_df)):
@@ -124,6 +123,7 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
         not_extract(dict): 存储对应系统中不被抽取的节点的id
 
     Returns:
+        `pd.DataFrame`
 
     """
     # 获取基准系统的信息
@@ -183,6 +183,7 @@ def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
         sorted_sys: 配置文件中基准系统的选取序列
 
     Returns:
+        None
 
     """
     if start_index == LABEL.shape[0]:  # 已经到达最后一级实体
@@ -214,7 +215,7 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
         not_extract: 不抽取的节点的id
 
     Returns:
-        tuple of lists
+        list
 
     """
     if not_extract is None:
@@ -247,6 +248,7 @@ def get_data2(system: str, pro: list, level: int, p_node_id: int, not_extract=No
             最后再合并
 
     Returns:
+        list
 
     """
     if not_extract is None:
@@ -273,7 +275,8 @@ def compute(base_data, tar_data, not_extract=None):
         not_extract(list): 不抽取的节点列表，在此处进行更新
 
     Returns:
-        结果字典与更新后的不抽取节点列表
+        dict, 结果字典
+        list, 更新后的不抽取节点列表
 
     """
     if not_extract is None:
@@ -300,6 +303,7 @@ def combine_sim(similarities: dict, base_sys_lab: str):
         base_sys_lab: 基准系统的标签
 
     Returns:
+        `pd.DataFrame`
 
     """
     res = []
@@ -345,6 +349,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
         start_index: 待融合实体的层级
 
     Returns:
+        None or `pd.DataFrame`
 
     """
     if not_extract is None:
@@ -431,27 +436,29 @@ def create_node_and_rel(node):
         node(Nodes): 一个`utils.Nodes`对象
 
     Returns:
+        None
 
     """
     tx = graph.begin()
-    root_node = create_node(tx, node.value, node.label, 0)
+    root_node = _create_node(tx, node.value, node.label, 0)
 
     def func(p_node: Node, nodes: Nodes, i: int):
         """一个递归调用的函数。
 
         Args:
             p_node: 一个`py2neo.Node`对象
-            nodes: 一个`trie.Nodes`对象
+            nodes: 一个`utils.Nodes`对象
             i: 记录层级
 
         Returns:
+            None
 
         """
         if isinstance(nodes, list):
             return
         data = nodes.children
-        for j in data:  # j也是一个`trie.Nodes`对象
-            node_ = create_node(tx, j.value, j.label, i)
+        for j in data:  # j也是一个`utils.Nodes`对象
+            node_ = _create_node(tx, j.value, j.label, i)
             rel = j.rel
             tx.create(Relationship(p_node, rel, node_))
             if not j.children:
@@ -465,13 +472,13 @@ def create_node_and_rel(node):
     tx.commit()
 
 
-def create_node(tx, value: list, label: str, level: int):
+def _create_node(tx, value: list, label: str, level: int):
     """根据融合结果的列表与配置文件中的迁移属性内容，创建新的节点对象。
 
     Args:
         tx: 一个图数据库的事务
         value: 融合后的节点在各个系统中的值的列表，长度等于系统的数量
-        label: 融合后的实体的标签，需要与`merge`合并为多标签
+        label: 融合后的实体的标签，需要与用户指定的融合标签合并为多标签
         level: 第几级实体
 
     Returns:
@@ -505,6 +512,7 @@ def delete_old(label):
         label(str): Node label
 
     Returns:
+        None
 
     """
     graph.run(f"match (n:`{label}`)-[r]-() delete r")
@@ -513,7 +521,7 @@ def delete_old(label):
 
 def get_save_mapping(task_id: str):
     """获取需要存入关系库的相关数据，包括：
-        - 当前计算的次数
+        - 当前计算的批次
         - 空间与本体的标签与其唯一标识及其他信息的映射字典
     """
     conn = connect(**eval(mysql_cfg))
