@@ -15,7 +15,7 @@
 #                                                                   #
 #-------------------------------------------------------------------#
 """
-from self_check import check
+from utils import check
 from flask import Flask, jsonify, request
 from concurrent.futures import ProcessPoolExecutor
 from progressbar import ProgressBar

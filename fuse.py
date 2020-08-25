@@ -24,8 +24,7 @@ import numpy as np
 from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
 from text_sim_utils import sims
-from utils import Nodes, sort_sys
-from self_check import get_paras
+from utils import Nodes, sort_sys, get_paras
 from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
