@@ -46,8 +46,8 @@ def func():
         print(__file__, sys._getframe().f_lineno, 'ERROR:', e)
         return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
     print("一切正常")
-    main_fuse(task_id)
-    # executor.submit(main_fuse, task_id)
+    # main_fuse(task_id)
+    executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 
