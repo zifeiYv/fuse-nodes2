@@ -52,7 +52,7 @@ def main_fuse(task_id):
     BASE_SYS_ORDER = sort_sys(LABEL)
     print("开始融合")
     print("删除旧的融合结果...")
-    delete_old('merge')
+    delete_old(merged_label)
     print("删除完成")
     print("正在融合根节点")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
