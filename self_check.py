@@ -111,12 +111,19 @@ def get_paras(task_id):
                 if isinstance(label.loc[num_rows-t[2], c], float):  # 说明该位置上尚未有值
                     label.loc[num_rows-t[2], c] = t[1]
                 else:  # 否则，将新的值追加到原来的值后面，用英文分号分割
-                    label.loc[num_rows-t[2], c] = label.loc[num_rows-t[2], c] + ';' + t[1]
+                    # todo: 以分号分割并进行后续处理的功能目前尚未完成，因此在此处进行了限制，
+                    #   即只如果某两个实体具有相同的权重，那么只会保留最后一个，至于是哪一个，
+                    #   是无法确定的。
+                    #   下同。
+                    # label.loc[num_rows-t[2], c] = label.loc[num_rows-t[2], c] + ';' + t[1]
+                    label.loc[num_rows-t[2], c] = t[1]
 
                 if isinstance(pro.loc[num_rows-t[2], c], float):
                     pro.loc[num_rows-t[2], c] = t[3]
                 else:
-                    pro.loc[num_rows-t[2], c] = pro.loc[num_rows-t[2], c] + ';' + t[3]
+                    # todo：同上
+                    # pro.loc[num_rows-t[2], c] = pro.loc[num_rows-t[2], c] + ';' + t[3]
+                    pro.loc[num_rows-t[2], c] = t[3]
 
     trans = pro.copy()
 
