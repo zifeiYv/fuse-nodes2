@@ -19,15 +19,15 @@
 # gunicorn -c gunicorn_config.py app:app
 #
 # 监听的ip与端口
-bind = '127.0.0.1:5000'
+bind = '0.0.0.0:5000'
 
 # 进程数量
 # workers = 4
 
 # 日志处理
-accesslog = './logs/info_log'
+accesslog = './logs/info.log'
 
-errorlog = './logs/error_log'
+errorlog = './logs/error.log'
 
 
 loglevel = 'warning'
