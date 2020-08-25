@@ -23,8 +23,7 @@ import pandas as pd
 import numpy as np
 from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
-from text_sim_utils import sims
-from utils import Nodes, sort_sys, get_paras
+from utils import Nodes, sort_sys, get_paras, Computation
 from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
@@ -43,6 +42,7 @@ auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
 mysql_res = cfg.get('mysql', 'mysql_res')
 mysql_cfg = cfg.get('mysql', 'mysql_cfg')
+graph = Graph(neo4j_url, auth=auth)
 
 
 def main_fuse(task_id):
@@ -51,7 +51,7 @@ def main_fuse(task_id):
     BASE_SYS_ORDER = sort_sys(LABEL)
     print("开始融合")
     print("删除旧的融合结果...")
-    delete_old('merge')
+    delete_old(merged_label)
     print("删除完成")
     print("正在融合根节点")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
@@ -219,7 +219,6 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
     """
     if not_extract is None:
         not_extract = []
-    graph = Graph(neo4j_url, auth=auth)
     ent_lab = ent_lab.split(',')
     if isinstance(pro, str):
         pro = [pro]
@@ -252,7 +251,6 @@ def get_data2(system: str, pro: list, level: int, p_node_id: int, not_extract=No
     """
     if not_extract is None:
         not_extract = []
-    graph = Graph(neo4j_url, auth=auth)
     assert isinstance(pro, list)
     rel = '-[:CONNECT]->'  # 父节点到此节点的关系
     tar_sys = LABEL[system].iloc[level].split(';')
@@ -318,113 +316,6 @@ def combine_sim(similarities: dict, base_sys_lab: str):
                 _l.append(np.nan)
         res.append(_l)
     return pd.DataFrame(data=res, columns=LABEL.columns)
-
-
-class Computation:
-    """根据从neo4j中读取得到的数据，计算相似度"""
-
-    def __init__(self, thresh=0.75):
-        """判定为同一对象的阈值，默认为0.75，可以通过配置文件修改"""
-        self.thresh = thresh
-
-    def compute(self, base_data, tar_data):
-        """对外提供的计算相似度的方法接口。
-
-        Args:
-            base_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
-            tar_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
-
-        Returns:
-            None/List
-
-        """
-        sim = np.zeros(shape=(len(base_data), len(tar_data)))
-        for i in range(len(base_data)):
-            for j in range(len(tar_data)):
-                sim[i, j] = self.__compute(base_data[i], tar_data[j])
-        return self.__matching(sim)
-
-    @staticmethod
-    def __compute(dict1, dict2) -> float:
-        """计算两个节点的相似度。
-
-        Args:
-            dict1(dict): 表示一个节点的字典
-            dict2(dict): 表示一个节点的字典
-
-        Returns:
-            相似度的值
-
-        """
-        sim = 0
-        weight = 1 / (len(dict1) - 1)
-        for k in dict1:
-            if k == 'id_':
-                continue
-            else:
-                sim += weight * sims(dict1[k], dict2[k])
-        return sim
-
-    def __match(self, sim_matrix):
-        """从相似度矩阵里面选择最相似的实体对，采用了递归的方法。
-
-        注意，由于`numpy.array.argmax()`方法在存在多个最大值的情况下默认只返回第一个的索引，
-        这种特性在某些情况下可能会导致错误的融合结果。
-
-        Args:
-            sim_matrix: 相似度矩阵
-
-        Returns:
-            None或者一个嵌套的列表
-
-        """
-        if np.sum(sim_matrix) == 0:
-            return None
-        res = []
-        args0 = sim_matrix.argmax(axis=0)  # 每一列的最大值位置
-        args1 = sim_matrix.argmax(axis=1)  # 每一行的最大值位置
-        for i in range(len(args1)):
-            if sim_matrix[i, args1[i]] < self.thresh:
-                sim_matrix[i, :] = 0
-                if [i, None] not in res:
-                    res.append([i, None])
-            else:
-                if args0[args1[i]] == i:
-                    res.append([i, args1[i]])
-                    sim_matrix[i, :] = 0
-                    sim_matrix[:, args1[i]] = 0
-
-        r = self.__match(sim_matrix)
-        if r:
-            return res + r
-        else:
-            return res
-
-    def __matching(self, sim_matrix):
-        """在调用`self.__match`之后，在横向或者纵向上可能遗留下一些非0值，对这些值
-        进行处理。
-
-        只处理基准表对应的数据，以保证基准表中所有的节点都被计算完成。
-
-        Args:
-            sim_matrix: 相似度矩阵
-
-        Returns:
-            嵌套的列表
-
-        """
-        res = self.__match(sim_matrix)
-        if res is None:
-            return np.nan
-        x = set([i[0] for i in res])
-        # y = set([i[1] for i in res])
-        for i in range(sim_matrix.shape[0]):
-            if i not in x:
-                res.append([i, np.nan])
-        # for j in range(sim_matrix.shape[1]):
-        #     if j not in y:
-        #         res.append([None, j])
-        return res
 
 
 def no_similarity(base_data: list, base_sys_lab: str):
@@ -537,12 +428,11 @@ def create_node_and_rel(node):
     """对于一个包含子图所有信息的node，将子图生成到Neo4j中去。
 
     Args:
-        node(Nodes): 一个`trie.Nodes`对象
+        node(Nodes): 一个`utils.Nodes`对象
 
     Returns:
 
     """
-    graph = Graph(neo4j_url, auth=auth)
     tx = graph.begin()
     root_node = create_node(tx, node.value, node.label, 0)
 
@@ -617,7 +507,6 @@ def delete_old(label):
     Returns:
 
     """
-    graph = Graph(neo4j_url, auth=auth)
     graph.run(f"match (n:`{label}`)-[r]-() delete r")
     graph.run(f"match (n:`{label}`) delete n")
 

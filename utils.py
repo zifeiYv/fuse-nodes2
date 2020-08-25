@@ -19,7 +19,8 @@ import pandas as pd
 from py2neo import Graph
 from pymysql import connect
 from configparser import ConfigParser
-
+import numpy as np
+from text_sim_utils import sims
 
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
@@ -65,6 +66,113 @@ class Nodes:
         self.children.append(node)
 
 
+class Computation:
+    """根据从neo4j中读取得到的数据，计算相似度"""
+
+    def __init__(self, thresh=0.75):
+        """判定为同一对象的阈值，默认为0.75，可以通过配置文件修改"""
+        self.thresh = thresh
+
+    def compute(self, base_data, tar_data):
+        """对外提供的计算相似度的方法接口。
+
+        Args:
+            base_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
+            tar_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
+
+        Returns:
+            None/List
+
+        """
+        sim = np.zeros(shape=(len(base_data), len(tar_data)))
+        for i in range(len(base_data)):
+            for j in range(len(tar_data)):
+                sim[i, j] = self.__compute(base_data[i], tar_data[j])
+        return self.__matching(sim)
+
+    @staticmethod
+    def __compute(dict1, dict2) -> float:
+        """计算两个节点的相似度。
+
+        Args:
+            dict1(dict): 表示一个节点的字典
+            dict2(dict): 表示一个节点的字典
+
+        Returns:
+            相似度的值
+
+        """
+        sim = 0
+        weight = 1 / (len(dict1) - 1)
+        for k in dict1:
+            if k == 'id_':
+                continue
+            else:
+                sim += weight * sims(dict1[k], dict2[k])
+        return sim
+
+    def __match(self, sim_matrix):
+        """从相似度矩阵里面选择最相似的实体对，采用了递归的方法。
+
+        注意，由于`numpy.array.argmax()`方法在存在多个最大值的情况下默认只返回第一个的索引，
+        这种特性在某些情况下可能会导致错误的融合结果。
+
+        Args:
+            sim_matrix: 相似度矩阵
+
+        Returns:
+            None或者一个嵌套的列表
+
+        """
+        if np.sum(sim_matrix) == 0:
+            return None
+        res = []
+        args0 = sim_matrix.argmax(axis=0)  # 每一列的最大值位置
+        args1 = sim_matrix.argmax(axis=1)  # 每一行的最大值位置
+        for i in range(len(args1)):
+            if sim_matrix[i, args1[i]] < self.thresh:
+                sim_matrix[i, :] = 0
+                if [i, None] not in res:
+                    res.append([i, None])
+            else:
+                if args0[args1[i]] == i:
+                    res.append([i, args1[i]])
+                    sim_matrix[i, :] = 0
+                    sim_matrix[:, args1[i]] = 0
+
+        r = self.__match(sim_matrix)
+        if r:
+            return res + r
+        else:
+            return res
+
+    def __matching(self, sim_matrix):
+        """在调用`self.__match`之后，在横向或者纵向上可能遗留下一些非0值，对这些值
+        进行处理。
+
+        只处理基准表对应的数据，以保证基准表中所有的节点都被计算完成。
+
+        Args:
+            sim_matrix: 相似度矩阵
+
+        Returns:
+            嵌套的列表
+
+        """
+        res = self.__match(sim_matrix)
+        if res is None:
+            return np.nan
+        x = set([i[0] for i in res])
+        for i in range(sim_matrix.shape[0]):
+            if i not in x:
+                res.append([i, np.nan])
+        return res
+
+
+class CheckError(Exception):
+    pass
+
+
 def sort_sys(label_df) -> dict:
     """根据配置文件的系统与实体标签，计算其中的基准系统，按照顺序进行排列。
 
@@ -80,10 +188,6 @@ def sort_sys(label_df) -> dict:
     for i in range(len(order)):
         res[i] = sorted_order[i][0]
     return res
-
-
-class CheckError(Exception):
-    pass
 
 
 def check(task_id):
