@@ -37,6 +37,7 @@ from uuid import uuid1
 bar = ProgressBar('sub_graph')
 
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+merged_label = ''
 BASE_SYS_ORDER = {}
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
@@ -49,8 +50,8 @@ mysql_cfg = cfg.get('mysql', 'mysql_cfg')
 
 
 def main_fuse(task_id):
-    global LABEL, PRO, TRANS, BASE_SYS_ORDER
-    LABEL, PRO, TRANS = get_paras(task_id)
+    global LABEL, PRO, TRANS, BASE_SYS_ORDER, merged_label
+    LABEL, PRO, TRANS, merged_label = get_paras(task_id)
     BASE_SYS_ORDER = sort_sys(LABEL)
     print("开始融合")
     print("删除旧的融合结果...")
@@ -608,7 +609,7 @@ def create_node(tx, value: list, label: str, level: int):
                 if val:
                     tran_pros.add(p)
                     data[f'{p}'] = val
-    return Node(*[label, 'merge'], **data)
+    return Node(*[label, merged_label], **data)
 
 
 def delete_old(label):
@@ -632,7 +633,7 @@ def get_save_mapping(task_id: str):
     """
     conn = connect(**eval(mysql_cfg))
     with conn.cursor() as cr:
-        cr.execute(f"select max(`batchNo`) from fuse_result where "
+        cr.execute(f"select max(`batchNo`) from gd_fuse_result where "
                    f"fuse_id='{task_id}'")
         cache = cr.fetchone()[0]
         next_batch_no = cache + 1 if cache else 1
@@ -684,7 +685,7 @@ def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id
                 ontological_id, ontological_name, ontological_weight, merge_cols = mapping[label]
                 matched = counter_all.iloc[i, j]
                 only = counter_only.iloc[i, j]
-                sql = f"insert into fuse_result values ('{id_}', '{task_id}', '{space_id}', " \
+                sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', '{space_id}', " \
                       f"'{ontological_id}', '{ontological_name}', '{label}', " \
                       f"{ontological_weight}, '{merge_cols}',{matched}, {only}, {next_batch_no}, " \
                       f"'{start_time}', '{end_time}')"

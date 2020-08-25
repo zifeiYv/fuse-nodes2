@@ -43,7 +43,7 @@ def check(task_id):
         except Exception as e:
             raise CheckError(e)
 
-    label, pro, trans = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
+    label, pro, trans, _ = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
@@ -92,6 +92,8 @@ def get_paras(task_id):
     except Exception as e:
         raise CheckError(e)
     with conn.cursor() as cr:
+        cr.execute(f"select label from gd_fuse where id='{task_id}'")
+        merged_label = cr.fetchone()[0]
         cr.execute(f"select space_label, ontological_label, ontological_weight, "
                    f"ontological_mapping_column_name from gd_fuse_attribute t where t.fuse_id='"
                    f"{task_id}'")
@@ -131,4 +133,4 @@ def get_paras(task_id):
 
     trans = pro.copy()
 
-    return label, pro, trans
+    return label, pro, trans, merged_label
