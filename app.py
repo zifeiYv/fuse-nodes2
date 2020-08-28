@@ -22,8 +22,6 @@ from progressbar import ProgressBar
 from fuse import main_fuse
 import sys
 
-FUSE_AND_CREATE = True  # 融合完成一个子图，便在Neo4j中创建一个子图
-
 bar = ProgressBar('sub_graph')
 bar.create()
 
