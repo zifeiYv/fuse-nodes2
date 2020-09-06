@@ -7,6 +7,7 @@ Main functions to create subgraphs basing on fuse results.
 """
 from configparser import ConfigParser
 from py2neo import Graph, Node, Relationship
+
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as (f):
     cfg.read_file(f)
@@ -84,8 +85,8 @@ def generate_node(label, pros, node_id1=None, node_id2=None, node_id3=None):
         A `py2neo.Node` object
     """
     graph = Graph(neo4j_url, auth=auth)
-    data = {'cmsId':node_id1 if node_id1 else '',  'pmsId':node_id2 if node_id2 else '', 
-     'gisId':node_id3 if node_id3 else ''}
+    data = {'cmsId': node_id1 if node_id1 else '', 'pmsId': node_id2 if node_id2 else '',
+            'gisId': node_id3 if node_id3 else ''}
     for p in pros:
         val = ''
         for id_ in [node_id1, node_id2, node_id3]:
@@ -95,7 +96,7 @@ def generate_node(label, pros, node_id1=None, node_id2=None, node_id3=None):
                     break
                 continue
 
-        data[{p}] = val
+        data[f'{p}'] = val
 
     return Node(*label, **data)
 
