@@ -1,9 +1,7 @@
-u"""
+"""
 @Time   : 2020/6/22 5:40 \u4e0b\u5348
 @Author : sunjiawei
 @E-mail : j.w.sun1992@gmail.com
-
-Main functions to create subgraphs basing on fuse results.
 """
 from configparser import ConfigParser
 from py2neo import Graph, Node, Relationship
@@ -25,25 +23,25 @@ if len(fused_entities) != len(cms_entities):
 
 
 def delete_old(label):
-    """Delete ole fuse results.
+    """删除已有的融合结果。
     
     Args:
-        label(str): Node label
+        label(str): 节点的标签
     
     Returns:
     
     """
     graph = Graph(neo4j_url, auth=auth)
-    graph.run(f'''match (n:`{label}`)-[r]-() delete r''')
-    graph.run(f'''match (n:`{label}`) delete n''')
+    graph.run(f'match (n:`{label}`)-[r]-() delete r')
+    graph.run(f'match (n:`{label}`) delete n')
 
 
 def create_subgraph(label, sub_graph):
-    """According to `sub_graph`, create a subgraph in neo4j.
+    """根据融合结果，创建新的图。
     
     Args:
-        label(str): New label from generated nodes
-        sub_graph(dict): A dict contains fuse results
+        label(str): 新图的标签
+        sub_graph(dict): 包含融合结果的字典
     
     Returns:
     
@@ -72,14 +70,14 @@ def create_subgraph(label, sub_graph):
 
 
 def generate_node(label, pros, node_id1=None, node_id2=None, node_id3=None):
-    """Generate fused node according to ids.
+    """根据融合结果的id，来生成融合图。
     
     Args:
-        label(list): Label of new node
-        pros(list): Properties that transferred from original nodes to new nodes
-        node_id1(str): Original node's id
-        node_id2(str): Original node's id
-        node_id3(str): Original node's id
+        label(list): 新节点的标签
+        pros(list): 新节点需要从旧节点继承的属性
+        node_id1(str): 旧节点id
+        node_id2(str): 旧节点id
+        node_id3(str): 旧节点id
     
     Returns:
         A `py2neo.Node` object
@@ -91,7 +89,7 @@ def generate_node(label, pros, node_id1=None, node_id2=None, node_id3=None):
         val = ''
         for id_ in [node_id1, node_id2, node_id3]:
             if id_ is not None:
-                val = graph.run(f'''match(n) where id(n)={id_} return n.{p} as p''').data()[0]['p']
+                val = graph.run(f'match(n) where id(n)={id_} return n.{p} as p').data()[0]['p']
                 if val:
                     break
                 continue

@@ -205,41 +205,40 @@ def get_root_data(sys, ent, prop, w):
 
 
 def get_data(graph_, father, sys, sys_type, ent, prop, w, i):
-    """Get data from neo4j. The extraction is the same with :func:`get_root_data`.
+    """从图数据库中获取数据。
     
     Args:
-        graph_: A `neo4j.Graph` object
-        father(str): Father node id
-        sys(str): System label
-        sys_type(str): System type, one of 'cms', 'pms' and 'gis'
-        ent(str): Entity label
-        prop(list): List of properties, a nested object
-        w(dict): Weight dict
-        i(int): Relationship's number
+        graph_: `neo4j.Graph`对象
+        father(str): 父节点的id
+        sys(str): 系统标签
+        sys_type(str): 系统类型，取值为'cms', 'pms' 或 'gis'
+        ent(str): 实体标签
+        prop(list): 待抽取属性的嵌套列表
+        w(dict): 权重
+        i(int): 关系的数量
     
     Returns:
-        List of dicts, each dict stands for a node in neo4j
+        由字典组成的列表，每个字典代表一个图数据库中的节点。
     """
     if sys_type == 'cms':
         rel = cms_rel[i - 1][1:][:-1]
+    elif sys_type == 'pms':
+        rel = pms_rel[i - 1][1:][:-1]
     else:
-        if sys_type == 'pms':
-            rel = pms_rel[i - 1][1:][:-1]
-        else:
-            rel = gis_rel[i - 1][1:][:-1]
-        count = 1
-        cypher = f'''match(m){rel}(n:{sys}:{ent}) where id(m)={father} return id(n) as id_, n.'''
-        for i in range(len(prop[0])):
-            cypher += prop[0][i] + f''' as `TEXT_{count}_{(w['TEXT'][i])}`, '''
-            count += 1
+        rel = gis_rel[i - 1][1:][:-1]
+    count = 1
+    cypher = f'match(m){rel}(n:{sys}:{ent}) where id(m)={father} return id(n) as id_, n.'
+    for i in range(len(prop[0])):
+        cypher += prop[0][i] + f" as `TEXT_{count}_{(w['TEXT'][i])}`, "
+        count += 1
 
-        for i in range(len(prop[1])):
-            cypher += prop[1][i] + f''' as `ENUM_{count}_{(w['ENUM'][i])}`, '''
-            count += 1
+    for i in range(len(prop[1])):
+        cypher += prop[1][i] + f" as `ENUM_{count}_{(w['ENUM'][i])}`, "
+        count += 1
 
-        cypher = cypher[:-2]
-        data = graph_.run(cypher).data()
-        return data
+    cypher = cypher[:-2]
+    data = graph_.run(cypher).data()
+    return data
 
 
 def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
