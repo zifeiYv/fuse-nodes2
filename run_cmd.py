@@ -5,20 +5,18 @@
 @E-mail : j.w.sun1992@gmail.com
 """
 import argparse
-import pickle
 from self_test import check
 from subgraphs import delete_old
 from configparser import ConfigParser
-import os
 
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--new-label', type=str, required=True, help='生成的融合图的标签')
 
-# args = parser.parse_args()
-# label = args.new_label
-label = 'merge'
+args = parser.parse_args()
+label = args.new_label
+# label = 'merge'
 
 if __name__ == '__main__':
     print("检查配置文件...")
