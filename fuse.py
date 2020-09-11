@@ -63,8 +63,6 @@ def main_fuse(task_id):
     if root_res_df is None:
         print("根节点融合后无结果，无法继续执行")
     else:
-        print("根节点融合完成，将结果写入关系型数据库...")
-
         print("根节点融合完成，开始融合子图")
         base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
         for i in range(len(root_res_df)):
