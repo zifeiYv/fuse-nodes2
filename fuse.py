@@ -567,8 +567,7 @@ def create_node_and_rel(node):
                 continue
             else:  # node_存在子节点，因此递归调用
                 k = i + 1
-                nodes = j.children
-                func(node_, nodes, k)
+                func(node_, j, k)
 
     func(root_node, node, 1)
     tx.commit()
