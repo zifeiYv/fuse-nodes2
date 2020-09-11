@@ -20,6 +20,7 @@ from flask import Flask, jsonify, request
 from concurrent.futures import ProcessPoolExecutor
 from progressbar import ProgressBar
 from fuse import main_fuse
+import traceback
 import sys
 
 bar = ProgressBar('sub_graph')
@@ -40,12 +41,12 @@ def func():
     assert task_id is not None, '必须传入任务id'
     try:
         check(task_id)
-    except Exception as e:
-        print(__file__, sys._getframe().f_lineno, 'ERROR:', e)
+    except Exception:
+        print(__file__, sys._getframe().f_lineno, 'ERROR:', traceback.print_exc())
         return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
     print("一切正常")
-    # main_fuse(task_id)
-    executor.submit(main_fuse, task_id)
+    main_fuse(task_id)
+    # executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 
