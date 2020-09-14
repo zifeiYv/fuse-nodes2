@@ -15,6 +15,7 @@
 #                                                                   #
 #-------------------------------------------------------------------#
 """
+from collections import OrderedDict
 
 
 class Nodes:
@@ -55,33 +56,17 @@ class Nodes:
 def sort_sys(label_df) -> dict:
     """根据配置文件的系统与实体标签，计算其中的基准系统，按照顺序进行排列。
 
-    目前，这种方式是考虑不周的。如果出现以下情况：
+    判断方法：将每一列看成一个二进制数字，非NaN值写成1，NaN值写成0，
+    只需要比较二进制数字的大小即可。数值越大，则越优先被选为基准系统。
 
-              | sys1 | sys2 | sys3 |
-        ------|------|------|------|
-        level1|      | Ent  |      |
-        ------|------|------|------|
-        level2| Ent  | Ent  | Ent  |
-        ------|------|------|------|
-        level3| Ent  |      |      |
-        ------|------|------|------|
-        level4| Ent  |      |      |
-        ------|------|------|------|
-    那么，当前的方法选择的基准系统顺序为：[sys1, sys2, sys3]。在这个基础上，
-    因为指定了实体标签的行索引值为0，所以在进行根节点融合时会因选择了NaN值而
-    出错。
-
-    对于上述情况，正确的识别顺序应该是：[sys2, sys1, sys3]。
-
-    commit: 已解决上述问题，将每一列看成一个二进制数字，非NaN值写成1，NaN值写成0，
-    只需要比较二进制数字的大小即可。
+    如果出现数值相等的情况，则按照从左到右的顺序进行判定。
 
     """
-    order, res = {}, {}
+    order, res = OrderedDict(), {}
     for col in label_df.columns:
-        _str = ['0' if isinstance(i, float) else '1' for i in label_df[col]]
-        order[col] = int("".join(_str), 2)
-    sorted_order = sorted(order.items(), key=lambda x: x[1], reverse=True)
+        str_list = ['0' if isinstance(i, float) else '1' for i in label_df[col]]
+        order[col] = int("".join(str_list), 2)  # 拼接到一起并转化为十进制数
+    sorted_order = sorted(order.items(), key=lambda x: x[1], reverse=True)  # 按大小排序
     for i in range(len(order)):
         res[i] = sorted_order[i][0]
     return res
