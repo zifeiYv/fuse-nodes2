@@ -43,7 +43,7 @@ def check(task_id):
         except Exception as e:
             raise CheckError(e)
 
-    label, pro, trans, _ = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
+    label, pro, trans, merged_label = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
@@ -83,6 +83,7 @@ def check(task_id):
         graph.run("Return 'OK'")
     except Exception as e:
         raise CheckError(e)
+    return merged_label
 
 
 def get_paras(task_id):

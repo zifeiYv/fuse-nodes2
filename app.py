@@ -23,9 +23,6 @@ from fuse import main_fuse
 import traceback
 import sys
 
-bar = ProgressBar('sub_graph')
-bar.create()
-
 url = '/entity_fuse/'
 executor = ProcessPoolExecutor(1)
 
@@ -34,30 +31,39 @@ app = Flask(__name__)
 
 @app.route(url, methods=['POST'])
 def func():
-    if bar.get() not in (1.0, 0.0):
-        return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
     print("必要的检查...")
     task_id = request.json['task_id']
     assert task_id is not None, '必须传入任务id'
     try:
-        check(task_id)
+        merged_label = check(task_id)
     except Exception:
         print(__file__, sys._getframe().f_lineno, 'ERROR:', traceback.print_exc())
         return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
     print("一切正常")
+    bar = ProgressBar(merged_label)
+    bar.create()
+    if bar.get() not in (1.0, 0.0):
+        return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
+
     # main_fuse(task_id)
     executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 
-@app.route(url + 'query_progress/')
+@app.route(url + 'query_progress/', methods=['POST'])
 def query_progress():
+    task_id = request.json['task_id']
+    merged_label = check(task_id)
+    bar = ProgressBar(merged_label)
     return jsonify({'state': 1, 'msg': round(bar.get(), 2)})
 
 
-@app.route(url + 'initialize/')
+@app.route(url + 'initialize/', methods=['POST'])
 def initialize():
     """未避免因强制终止程序使得sqlite中的进度不为1而导致无法进行融合，请求本服务以将其置为0"""
+    task_id = request.json['task_id']
+    merged_label = check(task_id)
+    bar = ProgressBar(merged_label)
     bar.create()
     return jsonify(({'state': 1, 'msg': '初始化状态成功'}))
 

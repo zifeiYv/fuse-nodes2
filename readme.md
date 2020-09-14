@@ -38,16 +38,26 @@ https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda3-2020.02-Linux-x8
 # 5. 接口说明
 1.  `http://127.0.0.1:5000/entity_fuse/`
 
-    请求方式：GET  
-    接口说明：执行融合任务
+    请求方式：POST  
+    接口说明：执行融合任务  
+    参数内容：  
+	       ```
+	       { 
+	       	"task_id": "3xjsie9908fa0-0dfdfjaldku1"
+	       }  
+	       ```
 
 2. `http://127.0.0.1:5000/entity_fuse/query_progress/`
     
-    请求方式：GET  
-    接口说明：查询当前任务的执行进度
+    请求方式：POST  
+    接口说明：查询当前任务的执行进度  
+    参数内容：同1。
+    
 
 3. `http://127.0.0.1:5000/entity_fuse/initialize/` 
 
-    请求方式：GET  
-    接口说明：当服务被终止时仍有在执行任务，请求此接口将该任务的进度重置
+    请求方式：POST  
+    接口说明：当服务被终止时仍有在执行任务，请求此接口将该任务的进度重置  
+    参数内容：同1。
+
 
