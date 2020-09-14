@@ -45,8 +45,8 @@ def func():
     if bar.get() not in (1.0, 0.0):
         return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
 
-    # main_fuse(task_id)
-    executor.submit(main_fuse, task_id)
+    main_fuse(task_id)
+    # executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 

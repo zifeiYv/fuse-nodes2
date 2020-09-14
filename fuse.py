@@ -130,7 +130,7 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
         not_extract = {}
     if label is None:
         label = LABEL
-    base_sys_lab = BASE_SYS_ORDER[base_order]
+    base_sys_lab = BASE_SYS_ORDER[base_order]  # 获取基准系统的标签（空间的标签）
     level_num = 0
     while True:
         base_ent_lab = label[base_sys_lab].iloc[level_num]
@@ -138,10 +138,9 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
             break
         else:
             level_num += 1
-    base_pros = PRO[base_sys_lab].iloc[level_num].split(';')
+    base_pros = PRO[base_sys_lab].iloc[level_num]
     # 获取基准系统的数据
-    base_data = get_data(base_sys_lab, base_ent_lab,
-                         base_pros, not_extract.get(base_sys_lab))
+    base_data = get_data(base_sys_lab, base_ent_lab, base_pros, not_extract.get(base_sys_lab))
     if not base_data:  # 说明没有获取到基准系统的数据
         return pd.DataFrame(columns=LABEL.columns)
     if label.shape[1] == 1:  # 说明系统标签库中只剩下一个系统，不再进行融合
@@ -156,9 +155,8 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
         tar_ent_lab = label[tar_sys_lab].iloc[level_num]
         if not isinstance(tar_ent_lab, str):
             continue
-        tar_pros = PRO[tar_sys_lab].iloc[level_num].split(';')
-        tar_data = get_data(tar_sys_lab, tar_ent_lab,
-                            tar_pros, not_extract.get(tar_sys_lab))
+        tar_pros = PRO[tar_sys_lab].iloc[level_num]
+        tar_data = get_data(tar_sys_lab, tar_ent_lab, tar_pros, not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
             continue
         similarities[tar_sys_lab], _not_extract = compute(base_data, tar_data,
@@ -189,8 +187,8 @@ def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
     label_df = LABEL.copy()
 
     # 先基于父实体的id，对其直接子节点进行完全融合
-    root = node.value
-    df = fuse_in_same_level(label_df, root, start_index)
+    root_ids = node.value
+    df = fuse_in_same_level(label_df, root_ids, start_index)
 
     if df is None:
         return
@@ -203,13 +201,13 @@ def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
         node.add_child(child)
 
 
-def get_data(system: str, ent_lab: str, pro, not_extract=None):
+def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
     """从图数据库获取数据。
 
     Args:
-        system: 来源系统的标签
-        ent_lab: 待获取数据的实体的标签，如果以英文逗号分割，则表明有多个实体标签处于同一等级
-        pro: 待获取实体的属性名称，str、list
+        sys_label: 来源系统的标签
+        ent_labs: 待获取数据的实体的标签，如果以英文分号分割，则表明有多个实体标签处于同一等级
+        pro_names: 待获取实体的属性名称
         not_extract: 不抽取的节点的id
 
     Returns:
@@ -219,26 +217,28 @@ def get_data(system: str, ent_lab: str, pro, not_extract=None):
     if not_extract is None:
         not_extract = []
     graph = Graph(neo4j_url, auth=auth)
-    ent_lab = ent_lab.split(',')
-    if isinstance(pro, str):
-        pro = [pro]
-    cypher = f'match (n:{system}) where '
-    for e in ent_lab:
-        cypher += f'n:{e} or '
-    cypher = cypher[:-3]
-    cypher += 'return id(n) as id_, '
-    for p in pro:
-        cypher += 'n.' + p + f' as {p}, '
-    cypher = cypher[:-2]
-    data = graph.run(cypher).data()
-    return [i for i in data if i['id_'] not in not_extract]
+    ent_labs = ent_labs.split(';')
+    pro_names = pro_names.split(';')
+    # ent_lab与pro中的本体标签与融合使用的属性应该一一对应
+    all_data = []
+    for i in range(len(ent_labs)):
+        ent_lab = ent_labs[i]
+        pros = pro_names[i].split(',')
+        cypher = f'match (n:{sys_label}:{ent_lab}) '
+        cypher += 'return id(n) as id_, '
+        for p in pros:
+            cypher += 'n.' + p + f' as {p}, '
+        cypher = cypher[:-2]
+        data = graph.run(cypher).data()
+        all_data.extend([i for i in data if i['id_'] not in not_extract])
+    return all_data
 
 
-def get_data2(system: str, pro: list, level: int, p_node_id: int, not_extract=None, order=0):
+def get_data2(sys_label: str, pro: list, level: int, p_node_id: int, not_extract=None, order=0):
     """根据父节点的id以及实体级别，找到其对应的所有子节点。
 
     Args:
-        system: 子实体所在系统/空间的标签
+        sys_label: 子实体所在系统/空间的标签
         pro: 融合子实体所依赖的属性列表
         level: 子实体的级别
         p_node_id: 父节点的id
@@ -254,7 +254,7 @@ def get_data2(system: str, pro: list, level: int, p_node_id: int, not_extract=No
     graph = Graph(neo4j_url, auth=auth)
     assert isinstance(pro, list)
     rel = '-[:CONNECT]->'  # 父节点到此节点的关系
-    tar_sys = LABEL[system].iloc[level].split(';')
+    tar_sys = LABEL[sys_label].iloc[level].split(';')
     tar_sys = tar_sys[order]
     cypher = f'match (n){rel}(m:`{tar_sys}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
              f'as id_, m.'
@@ -464,12 +464,12 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     # 基准与目标系统的获取需要满足两个条件，一个是在该系统的父级融合结果中有值，另一个是
     # 系统在本次融合的级别上有实体
     #
-    base_sys = ''
-    tar_sys_list = []
+    base_sys = ''  # 基准系统
+    tar_sys_list = []  # 目标系统列表
     for i in range(len(sorted_sys)):
         base_sys = sorted_sys[i]
-        if not np.isnan(root_results[systems.index(base_sys)]):
-            if isinstance(labels[systems.index(base_sys)], str):
+        if not np.isnan(root_results[systems.index(base_sys)]):  # 父级结果有值
+            if isinstance(labels[systems.index(base_sys)], str):  # 当前级别存在实体
                 tar_sys_list = list(set(sorted_sys.values()) - {base_sys})
                 break
     if not base_sys:
