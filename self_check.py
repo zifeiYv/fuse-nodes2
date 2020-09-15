@@ -145,6 +145,9 @@ def get_paras(task_id):
                 else:
                     pro.loc[num_rows-weights.index(t[2])-1, c] = pro.loc[num_rows-weights.index(t[2])-1, c] + ';' + t[3]
                     # pro.loc[num_rows-weights.index(t[2])-1, c] = t[3]
+    # 根节点暂不支持多个本体
+    for i in range(label.shape[1]):
+        assert ';' not in label.iloc[0, i], "根节点暂不支持多个本体融合"
 
     trans = pro.copy()
 

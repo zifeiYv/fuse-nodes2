@@ -15,7 +15,7 @@
 #                                                                   #
 #-------------------------------------------------------------------#
 """
-from self_check import check
+from self_check import check, get_paras
 from flask import Flask, jsonify, request
 from concurrent.futures import ProcessPoolExecutor
 from progressbar import ProgressBar
@@ -53,7 +53,7 @@ def func():
 @app.route(url + 'query_progress/', methods=['POST'])
 def query_progress():
     task_id = request.json['task_id']
-    merged_label = check(task_id)
+    _, _, _, merged_label = get_paras(task_id)
     bar = ProgressBar(merged_label)
     return jsonify({'state': 1, 'msg': round(bar.get(), 2)})
 
@@ -62,7 +62,7 @@ def query_progress():
 def initialize():
     """未避免因强制终止程序使得sqlite中的进度不为1而导致无法进行融合，请求本服务以将其置为0"""
     task_id = request.json['task_id']
-    merged_label = check(task_id)
+    _, _, _, merged_label = get_paras(task_id)
     bar = ProgressBar(merged_label)
     bar.create()
     return jsonify(({'state': 1, 'msg': '初始化状态成功'}))

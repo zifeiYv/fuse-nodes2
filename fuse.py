@@ -7,31 +7,25 @@
 #                                                                   #
 #                          Author : Jiawei Sun                      #
 #                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
+#                           Email : j.w.sun1992@gmail.com           #
 #                                                                   #
 #                      Start Date : 2020/07/14                      #
 #                                                                   #
 #                     Last Update : 2020/08/25                      #
 #                                                                   #
 #-------------------------------------------------------------------#
-
-问题记录：
-    - 嵌套递归的效率问题。
-
 """
 import pandas as pd
 import numpy as np
 from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
-from text_sim_utils import sims
-from utils import Nodes, sort_sys
+from utils import Nodes, sort_sys, Computation
 from self_check import get_paras
 from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
 from uuid import uuid1
 
-bar = ProgressBar('sub_graph')
 
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 merged_label = ''
@@ -50,6 +44,7 @@ def main_fuse(task_id):
     global LABEL, PRO, TRANS, BASE_SYS_ORDER, merged_label
     LABEL, PRO, TRANS, merged_label = get_paras(task_id)
     BASE_SYS_ORDER = sort_sys(LABEL)
+    bar = ProgressBar(merged_label)
     print("开始融合")
     print("删除旧的融合结果...")
     delete_old(merged_label)
@@ -169,35 +164,35 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
     return df.append(fuse_root_nodes(label, base_order + 1, not_extract))
 
 
-def fuse_other_nodes(start_index: int, node, sorted_sys: dict):
+def fuse_other_nodes(level: int, node, sorted_sys: dict):
     """通过递归的方式，根据给出的根节点融合结果，对其下所有可能的节点进行融合。
 
     此函数没有返回值，而是将对传入的node参数进行改写，以不断挂接新的子节点。
 
     Args:
-        start_index: 指定当前是第几级实体，用于控制递归的进行，0表示根节点，依次递加
+        level: 指定当前是第几级实体，用于控制递归的进行，0表示根节点，依次递加
         node(Nodes): 一个节点对象，存储父节点的有关信息
         sorted_sys: 配置文件中基准系统的选取序列
 
     Returns:
 
     """
-    if start_index == LABEL.shape[0]:  # 已经到达最后一级实体
+    if level == LABEL.shape[0]:  # 已经到达最后一级实体
         return
-    label_df = LABEL.copy()
+    # label_df = LABEL.copy()
 
     # 先基于父实体的id，对其直接子节点进行完全融合
-    root_ids = node.value
-    df = fuse_in_same_level(label_df, root_ids, start_index)
+    parent_ids = node.value
+    df = fuse_in_same_level(LABEL, parent_ids, level)
 
     if df is None:
         return
     for i in range(df.shape[0]):
         value = df.iloc[i].to_list()
-        label = LABEL[sorted_sys[min(sorted_sys)]].iloc[start_index]
+        label = LABEL[sorted_sys[min(sorted_sys)]].iloc[level]
         rel = '-[:CONNECT]->'
         child = Nodes(label, value, rel)
-        fuse_other_nodes(start_index + 1, child, sorted_sys)
+        fuse_other_nodes(level + 1, child, sorted_sys)
         node.add_child(child)
 
 
@@ -234,12 +229,12 @@ def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
     return all_data
 
 
-def get_data2(sys_label: str, pro: list, level: int, p_node_id: int, not_extract=None, order=0):
+def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extract=None, order=0):
     """根据父节点的id以及实体级别，找到其对应的所有子节点。
 
     Args:
         sys_label: 子实体所在系统/空间的标签
-        pro: 融合子实体所依赖的属性列表
+        pros: 融合子实体所依赖的属性列表
         level: 子实体的级别
         p_node_id: 父节点的id
         not_extract: 不抽取的节点的id列表
@@ -252,13 +247,12 @@ def get_data2(sys_label: str, pro: list, level: int, p_node_id: int, not_extract
     if not_extract is None:
         not_extract = []
     graph = Graph(neo4j_url, auth=auth)
-    assert isinstance(pro, list)
     rel = '-[:CONNECT]->'  # 父节点到此节点的关系
-    tar_sys = LABEL[sys_label].iloc[level].split(';')
-    tar_sys = tar_sys[order]
-    cypher = f'match (n){rel}(m:`{tar_sys}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
+    tar_ent_list = LABEL[sys_label].iloc[level].split(';')
+    tar_ent = tar_ent_list[order]
+    cypher = f'match (n){rel}(m:`{tar_ent}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
              f'as id_, m.'
-    for p in pro:
+    for p in pros:
         cypher += p + f' as {p}, '
     cypher = cypher[:-2]
     data = graph.run(cypher).data()
@@ -297,7 +291,20 @@ def combine_sim(similarities: dict, base_sys_lab: str):
     """将基准系统与目标系统的融合结果进行拼接，形成最后的融合结果。
 
     Args:
-        similarities: 记录基准系统与目标系统之间的相似性结果
+        similarities: 记录基准系统与目标系统之间的相似性结果，其内容格式如下：
+            {
+                "target_system_label_1": {
+                    0: 99,
+                    1: 89,
+                    2: np.nan
+                },
+                "target_system_label_2": {
+                    0: 45,
+                    1: np.nan,
+                    2: 34
+                }
+            }
+            外层字典的键，是目标系统的标签；每个内层系统的键都是一样的，为基准系统中待融合的实体的id。
         base_sys_lab: 基准系统的标签
 
     Returns:
@@ -319,113 +326,6 @@ def combine_sim(similarities: dict, base_sys_lab: str):
     return pd.DataFrame(data=res, columns=LABEL.columns)
 
 
-class Computation:
-    """根据从neo4j中读取得到的数据，计算相似度"""
-
-    def __init__(self, thresh=0.75):
-        """判定为同一对象的阈值，默认为0.75，可以通过配置文件修改"""
-        self.thresh = thresh
-
-    def compute(self, base_data, tar_data):
-        """对外提供的计算相似度的方法接口。
-
-        Args:
-            base_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
-            tar_data(list[dict]): 字典组成的列表，每个字典都表示一个节点
-
-        Returns:
-            None/List
-
-        """
-        sim = np.zeros(shape=(len(base_data), len(tar_data)))
-        for i in range(len(base_data)):
-            for j in range(len(tar_data)):
-                sim[i, j] = self.__compute(base_data[i], tar_data[j])
-        return self.__matching(sim)
-
-    @staticmethod
-    def __compute(dict1, dict2) -> float:
-        """计算两个节点的相似度。
-
-        Args:
-            dict1(dict): 表示一个节点的字典
-            dict2(dict): 表示一个节点的字典
-
-        Returns:
-            相似度的值
-
-        """
-        sim = 0
-        weight = 1 / (len(dict1) - 1)
-        for k in dict1:
-            if k == 'id_':
-                continue
-            else:
-                sim += weight * sims(dict1[k], dict2[k])
-        return sim
-
-    def __match(self, sim_matrix):
-        """从相似度矩阵里面选择最相似的实体对，采用了递归的方法。
-
-        注意，由于`numpy.array.argmax()`方法在存在多个最大值的情况下默认只返回第一个的索引，
-        这种特性在某些情况下可能会导致错误的融合结果。
-
-        Args:
-            sim_matrix: 相似度矩阵
-
-        Returns:
-            None或者一个嵌套的列表
-
-        """
-        if np.sum(sim_matrix) == 0:
-            return None
-        res = []
-        args0 = sim_matrix.argmax(axis=0)  # 每一列的最大值位置
-        args1 = sim_matrix.argmax(axis=1)  # 每一行的最大值位置
-        for i in range(len(args1)):
-            if sim_matrix[i, args1[i]] < self.thresh:
-                sim_matrix[i, :] = 0
-                if [i, None] not in res:
-                    res.append([i, None])
-            else:
-                if args0[args1[i]] == i:
-                    res.append([i, args1[i]])
-                    sim_matrix[i, :] = 0
-                    sim_matrix[:, args1[i]] = 0
-
-        r = self.__match(sim_matrix)
-        if r:
-            return res + r
-        else:
-            return res
-
-    def __matching(self, sim_matrix):
-        """在调用`self.__match`之后，在横向或者纵向上可能遗留下一些非0值，对这些值
-        进行处理。
-
-        只处理基准表对应的数据，以保证基准表中所有的节点都被计算完成。
-
-        Args:
-            sim_matrix: 相似度矩阵
-
-        Returns:
-            嵌套的列表
-
-        """
-        res = self.__match(sim_matrix)
-        if res is None:
-            return np.nan
-        x = set([i[0] for i in res])
-        # y = set([i[1] for i in res])
-        for i in range(sim_matrix.shape[0]):
-            if i not in x:
-                res.append([i, np.nan])
-        # for j in range(sim_matrix.shape[1]):
-        #     if j not in y:
-        #         res.append([None, j])
-        return res
-
-
 def no_similarity(base_data: list, base_sys_lab: str):
     """在没有获取到目标系统标签或目标系统数据后，返回本内容"""
     res = []
@@ -440,8 +340,8 @@ def no_similarity(base_data: list, base_sys_lab: str):
     return pd.DataFrame(data=res, columns=LABEL.columns)
 
 
-def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
-                       start_index: int, not_extract: list = None):
+def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
+                       level: int, not_extract: list = None):
     """对于同一级别下的多系统实体，进行完全融合。
 
     运用了递归，依次寻找基准系统与目标系统。
@@ -449,8 +349,8 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     Args:
         label_df: 存储系统与实体标签的data frame
         not_extract: 不抽取的实体id列表，按系统名称的字典存储
-        root_results: 存储根节点的id列表
-        start_index: 待融合实体的层级
+        parent_ids: 存储根节点的id列表
+        level: 待融合实体的层级
 
     Returns:
 
@@ -458,7 +358,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     if not_extract is None:
         not_extract = {}
     systems = label_df.columns.to_list()
-    labels = label_df.iloc[start_index].to_list()
+    labels = label_df.iloc[level].to_list()
     sorted_sys = sort_sys(label_df)  # 基准系统选择顺序
     #
     # 基准与目标系统的获取需要满足两个条件，一个是在该系统的父级融合结果中有值，另一个是
@@ -468,7 +368,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     tar_sys_list = []  # 目标系统列表
     for i in range(len(sorted_sys)):
         base_sys = sorted_sys[i]
-        if not np.isnan(root_results[systems.index(base_sys)]):  # 父级结果有值
+        if not np.isnan(parent_ids[systems.index(base_sys)]):  # 父级结果有值
             if isinstance(labels[systems.index(base_sys)], str):  # 当前级别存在实体
                 tar_sys_list = list(set(sorted_sys.values()) - {base_sys})
                 break
@@ -484,18 +384,19 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     # 称之间以英文分号连接。对于这种情况，融合前先将一个单元格内的所有种类的实体的数据
     # 全部获取到，然后按照相同的方法融合。
     #
-    base_pros = PRO[base_sys].iloc[start_index].split(';')
-    base_p_id = root_results[systems.index(base_sys)]
+    base_pros = PRO[base_sys].iloc[level].split(';')
+    base_p_id = parent_ids[systems.index(base_sys)]
     if np.isnan(base_p_id):
         return None
-    if len(base_pros) > 1:  # 说明出现类多类实体处在同一级别上
+    if len(base_pros) > 1:  # 说明出现多类实体处在同一级别上
+        # 在当前的设置中，这个条件分支永远也不会被执行到
         base_data = []
         for i in range(len(base_pros)):
             base_pro = base_pros[i].split(',')
-            base_data.extend(get_data2(base_sys, base_pro, start_index, base_p_id,
+            base_data.extend(get_data2(base_sys, base_pro, level, base_p_id,
                                        not_extract.get(base_sys), i))
     else:
-        base_data = get_data2(base_sys, base_pros, start_index, base_p_id,
+        base_data = get_data2(base_sys, base_pros, level, base_p_id,
                               not_extract.get(base_sys))
         if not base_data:
             return None
@@ -504,8 +405,8 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
     # 并将比对的结果存储下来
     similarities = {}
     for tar_sys in tar_sys_list:
-        tar_pros = PRO[tar_sys].iloc[start_index].split(';')
-        tar_p_id = root_results[systems.index(tar_sys)]
+        tar_pros = PRO[tar_sys].iloc[level].split(';')
+        tar_p_id = parent_ids[systems.index(tar_sys)]
         if np.isnan(tar_p_id):
             continue
         if not isinstance(labels[systems.index(tar_sys)], str):
@@ -514,10 +415,10 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
             tar_data = []
             for i in range(len(tar_pros)):
                 tar_pro = tar_pros[i].split(',')
-                tar_data.extend(get_data2(tar_sys, tar_pro, start_index, tar_p_id,
+                tar_data.extend(get_data2(tar_sys, tar_pro, level, tar_p_id,
                                           not_extract.get(tar_sys), i))
         else:
-            tar_data = get_data2(tar_sys, tar_pros, start_index, tar_p_id, not_extract.get(tar_sys))
+            tar_data = get_data2(tar_sys, tar_pros, level, tar_p_id, not_extract.get(tar_sys))
             if not tar_data:
                 continue
             similarities[tar_sys], _not_extract = compute(base_data, tar_data,
@@ -527,9 +428,9 @@ def fuse_in_same_level(label_df: pd.DataFrame, root_results: list,
         return no_similarity(base_data, base_sys)
     df = combine_sim(similarities, base_sys)
     label_df = label_df.drop(base_sys, axis=1)
-    root_results_bak = root_results.copy()
+    root_results_bak = parent_ids.copy()
     root_results_bak.pop(systems.index(base_sys))
-    return df.append(fuse_in_same_level(label_df, root_results_bak, start_index, not_extract))
+    return df.append(fuse_in_same_level(label_df, root_results_bak, level, not_extract))
 
 
 def create_node_and_rel(node):
@@ -636,6 +537,8 @@ def get_save_mapping(task_id: str):
                    f"ontological_label, ontological_weight, ontological_mapping_column_name "
                    f"from gd_fuse_attribute t where t.fuse_id = '{task_id}'")
         info = cr.fetchall()
+        # info: 空间标签的唯一标识，空间标签，本体标签的唯一标识，本体名称，
+        #       本体标签，本体权重，融合字段
     mapping = {}
     for i in info:
         mapping[i[1]] = i[0]
