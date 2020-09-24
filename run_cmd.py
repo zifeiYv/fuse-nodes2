@@ -16,7 +16,6 @@ parser.add_argument('--new-label', type=str, required=True, help='生成的融�
 
 args = parser.parse_args()
 label = args.new_label
-# label = 'merge'
 
 if __name__ == '__main__':
     print("检查配置文件...")
