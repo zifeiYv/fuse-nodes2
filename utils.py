@@ -1,4 +1,4 @@
-u"""
+"""
 @Time   : 2020/6/23 3:18 \u4e0b\u5348
 @Author : sunjiawei
 @E-mail : j.w.sun1992@gmail.com
@@ -99,52 +99,65 @@ def fuse_other_nodes(start_index, root_result):
     graph = Graph(neo4j_url, auth=auth)
     result_dict = {}
     i = start_index
-    ce, pe, ge = cms_entities[i], pms_entities[i], gis_entities[i]
     cp, pp, gp = get_property(i)
     w = eval(weight[i])
-    if root_result.count(None) == 0:  # 父节点都有数据，查找对应子节点的数据
-        cms_data = get_data(graph, root_result[0], cms, 'cms', ce, cp, w, i)
-        pms_data = get_data(graph, root_result[1], pms, 'pms', ce, cp, w, i)
-        gis_data = get_data(graph, root_result[2], gis, 'gis', ce, cp, w, i)
-    else:
-        if root_result.count(None) == 1:  # 父节点只有2个系统有数据，查找对应子节点的数据
-            if root_result[0] is None:
-                cms_data = []
-                pms_data = get_data(graph, root_result[1], pms, 'pms', ce, cp, w, i)
-                gis_data = get_data(graph, root_result[2], gis, 'gis', ce, cp, w, i)
-            else:
-                if root_result[1] is None:
-                    pms_data = []
-                    cms_data = get_data(graph, root_result[0], cms, 'cms', ce, cp, w, i)
-                    gis_data = get_data(graph, root_result[2], gis, 'gis', ce, cp, w, i)
-                else:
-                    gis_data = []
-                    cms_data = get_data(graph, root_result[0], cms, 'cms', ce, cp, w, i)
-                    pms_data = get_data(graph, root_result[1], pms, 'pms', ce, cp, w, i)
-        else:  # 父节点只有1个系统有数据，查找对应子节点的数据
-            if root_result[0] is not None:
-                pms_data, gis_data = [], []
-                cms_data = get_data(graph, root_result[0], cms, 'cms', ce, cp, w, i)
-            elif root_result[1] is not None:
-                cms_data, gis_data = [], []
-                pms_data = get_data(graph, root_result[1], pms, 'pms', ce, cp, w, i)
-            else:
-                cms_data, pms_data = [], []
-                gis_data = get_data(graph, root_result[2], gis, 'gis', ce, cp, w, i)
 
-    res = validate_data_and_fuse(i, cms_data, pms_data, gis_data)
-    if res is None:
-        return {}
-    if start_index < len(cms_entities) - 1:
+    def func(cms_ent, pms_ent, gis_ent):
+        if root_result.count(None) == 0:  # 父节点都有数据，查找对应子节点的数据
+            cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
+            pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, pp, w, i)
+            gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+        else:
+            if root_result.count(None) == 1:  # 父节点只有2个系统有数据，查找对应子节点的数据
+                if root_result[0] is None:
+                    cms_data = []
+                    pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, cp, w, i)
+                    gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+                else:
+                    if root_result[1] is None:
+                        pms_data = []
+                        cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
+                        gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+                    else:
+                        gis_data = []
+                        cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
+                        pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, pp, w, i)
+            else:  # 父节点只有1个系统有数据，查找对应子节点的数据
+                if root_result[0] is not None:
+                    pms_data, gis_data = [], []
+                    cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
+                elif root_result[1] is not None:
+                    cms_data, gis_data = [], []
+                    pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, pp, w, i)
+                else:
+                    cms_data, pms_data = [], []
+                    gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+
+        _res = validate_data_and_fuse(i, cms_data, pms_data, gis_data)
+        return _res
+
+    if i == 1:
+        ce, pe, ge = cms_entities[i], pms_entities[i], gis_entities[i]
+        res = func(ce, pe, ge)
+        if res is None:
+            return {}
         start_index += 1
         for j in range(len(res)):
             result_dict[j] = {'val': res[j],
                               'children': fuse_other_nodes(start_index, res[j])}
-
     else:
-        for j in range(len(res)):
-            result_dict[j] = {'val': res[j],
-                              'children': {}}
+        ces, pes, ges = cms_entities[i], pms_entities[i], gis_entities[i]
+        ces = ces.split('&')
+        pes = pes.split('&')
+        ges = ges.split('&')
+        for i in range(2):
+            ce, pe, ge = ces[i], pes[i], ges[i]
+            res = func(ce, pe, ge)
+            if res is None:
+                return {}
+            for j in range(len(res)):
+                result_dict[i*len(res) + j] = {'val': res[j],
+                                               'children': {}}
 
     return result_dict
 
@@ -267,15 +280,6 @@ def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
     if none_counts == 3:
         logger.warning(f'''{('  ' * i)}所有系统无数据''')
         return
-    # if none_counts == 2:
-    #     logger.warning(f'''{('  ' * i)}只有一个系统有数据''')
-    #     return
-    # else:
-    #     if none_counts == 1:
-    #         logger.warning(f'''{('  ' * i)}两个系统有数据''')
-    #     else:
-    #         logger.info(f'''{('  ' * i)}三个系统有数据''')
-    #     return compute_sim_and_combine(i, none_counts, cms_data, pms_data, gis_data)
     else:
         return compute_sim_and_combine(i, none_counts, cms_data, pms_data, gis_data)
 
