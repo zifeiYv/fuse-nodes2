@@ -19,13 +19,13 @@ from text_sim_utils import sims
 logger = gen_logger('fuse.log', 1)
 logger.info('获取必要的信息...')
 cfg = ConfigParser()
-with open('./config_files/application.cfg') as (f):
+with open('./config_files/application.cfg', encoding='utf-8') as (f):
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
 mysql = cfg.get('mysql', 'mysql')
 THRESHOLD = cfg.getfloat('threshold', 'threshold')
-with open('./config_files/neo4j-structure.cfg') as (f):
+with open('./config_files/neo4j-structure.cfg', encoding='utf-8') as (f):
     cfg.read_file(f)
 cms, pms, gis = cfg.get('system_label', 'cms'), cfg.get('system_label', 'pms'), cfg.get(
     'system_label', 'gis')
@@ -142,6 +142,7 @@ def fuse_other_nodes(start_index, root_result):
         if res is None:
             return {}
         start_index += 1
+        print(len(res))
         for j in range(len(res)):
             result_dict[j] = {'val': res[j],
                               'children': fuse_other_nodes(start_index, res[j])}
@@ -150,13 +151,14 @@ def fuse_other_nodes(start_index, root_result):
         ces = ces.split('&')
         pes = pes.split('&')
         ges = ges.split('&')
-        for i in range(2):
-            ce, pe, ge = ces[i], pes[i], ges[i]
+        for k in range(2):
+            ce, pe, ge = ces[k], pes[k], ges[k]
             res = func(ce, pe, ge)
             if res is None:
-                return {}
+                continue
+                # return {}
             for j in range(len(res)):
-                result_dict[i*len(res) + j] = {'val': res[j],
+                result_dict[k*len(res) + j] = {'val': res[j],
                                                'children': {}}
 
     return result_dict

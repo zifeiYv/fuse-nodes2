@@ -7,11 +7,11 @@ from configparser import ConfigParser
 from py2neo import Graph, Node, Relationship
 
 cfg = ConfigParser()
-with open('./config_files/application.cfg') as (f):
+with open('./config_files/application.cfg', encoding='utf-8') as (f):
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
-with open('./config_files/neo4j-structure.cfg') as (f):
+with open('./config_files/neo4j-structure.cfg', encoding='utf-8') as (f):
     cfg.read_file(f)
 fused_entities = cfg.get('fuse', 'entities').split(',')
 fused_rel = cfg.get('fuse', 'relationships').split(',')
@@ -46,10 +46,16 @@ def create_subgraph(label, sub_graph):
     Returns:
     
     """
+    # graph = Graph(neo4j_url, auth=auth)
+    # tx = graph.begin()
+    # root_node = generate_node([fused_entities[0], label], fused_pros[0], *sub_graph['val'])
+    # tx.create(root_node)
     graph = Graph(neo4j_url, auth=auth)
-    tx = graph.begin()
-    root_node = generate_node([fused_entities[0], label], fused_pros[0], *sub_graph['val'])
-    tx.create(root_node)
+    cypher = f"CALL apoc.periodic.commit('MATCH (n:{label}) WITH n " \
+        "LIMIT $limit detach DELETE n " \
+        "RETURN count(*)', {limit:10000}) " \
+        "YIELD updates, executions, runtime, batches RETURN updates, executions, runtime, batches"
+    graph.run(cypher).data()
 
     def func(parent_node, graph_data, i):
         data = graph_data['children']

@@ -43,7 +43,7 @@ def check():
     cfg = ConfigParser()
     # Is there a `neo4j-structure.cfg` file?
     try:
-        with open('./config_files/neo4j-structure.cfg') as f:
+        with open('./config_files/neo4j-structure.cfg', encoding='utf-8') as f:
             cfg.read_file(f)
     except FileNotFoundError:
         raise
@@ -145,7 +145,7 @@ def check():
                         f"'ENUM' properties doesn't match among three systems(property no. {i})")
 
     try:
-        with open('config_files/application.cfg') as f:
+        with open('config_files/application.cfg', encoding='utf-8') as f:
             cfg.read_file(f)
     except FileNotFoundError:
         raise
