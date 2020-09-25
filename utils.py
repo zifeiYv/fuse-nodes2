@@ -142,7 +142,6 @@ def fuse_other_nodes(start_index, root_result):
         if res is None:
             return {}
         start_index += 1
-        print(len(res))
         for j in range(len(res)):
             result_dict[j] = {'val': res[j],
                               'children': fuse_other_nodes(start_index, res[j])}

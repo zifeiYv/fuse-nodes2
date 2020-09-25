@@ -27,7 +27,7 @@ def gen_logger(log_file_name, console_printing=False):
     logger.setLevel(logging.INFO)
     if not logger.handlers:  # 避免重复添加handler
         console = StreamHandler()
-        handler = RotatingFileHandler(log_file_name, maxBytes=3 * 1024 * 1024, backupCount=5)
+        handler = RotatingFileHandler(log_file_name, maxBytes=3 * 1024 * 1024, backupCount=5, encoding='utf-8')
         formatter = logging.Formatter(
             '%(process)d %(asctime)s %(levelname)7s %(filename)10s %(lineno)3d | %(message)s ',
             datefmt='%Y-%m-%d %H:%M:%S')
