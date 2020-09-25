@@ -32,8 +32,12 @@ def delete_old(label):
     
     """
     graph = Graph(neo4j_url, auth=auth)
-    graph.run(f'match (n:`{label}`)-[r]-() delete r')
-    graph.run(f'match (n:`{label}`) delete n')
+    cypher = f"CALL apoc.periodic.commit('MATCH (n:{label}) WITH n " \
+        "LIMIT $limit detach DELETE n " \
+        "RETURN count(*)', {limit:10000}) " \
+        "YIELD updates, executions, runtime, batches RETURN updates, executions, runtime, batches"
+    data = graph.run(cypher).data()
+    print(data)
 
 
 def create_subgraph(label, sub_graph):
@@ -46,16 +50,10 @@ def create_subgraph(label, sub_graph):
     Returns:
     
     """
-    # graph = Graph(neo4j_url, auth=auth)
-    # tx = graph.begin()
-    # root_node = generate_node([fused_entities[0], label], fused_pros[0], *sub_graph['val'])
-    # tx.create(root_node)
     graph = Graph(neo4j_url, auth=auth)
-    cypher = f"CALL apoc.periodic.commit('MATCH (n:{label}) WITH n " \
-        "LIMIT $limit detach DELETE n " \
-        "RETURN count(*)', {limit:10000}) " \
-        "YIELD updates, executions, runtime, batches RETURN updates, executions, runtime, batches"
-    graph.run(cypher).data()
+    tx = graph.begin()
+    root_node = generate_node([fused_entities[0], label], fused_pros[0], *sub_graph['val'])
+    tx.create(root_node)
 
     def func(parent_node, graph_data, i):
         data = graph_data['children']
