@@ -55,7 +55,7 @@ def main_fuse(task_id):
     counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     root_res_df = fuse_root_nodes()
-    if root_res_df is None:
+    if root_res_df.empty:
         print("根节点融合后无结果，无法继续执行")
     else:
         print("根节点融合完成，开始融合子图")
