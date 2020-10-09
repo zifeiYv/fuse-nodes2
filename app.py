@@ -5,7 +5,12 @@ Author     : Jiawei Sun
 Email      : j.w.sun1992@gmail.com
 Start Date : 2020/07/16
 Describe   :
-    应用的启动入口
+    应用的启动入口.
+
+    返回的json对象中，"state"的值共有三个：
+    0：正常结束
+    1：程序报错
+    2：程序正在运行
 """
 from self_check import check, get_paras
 from flask import Flask, jsonify, request, json
@@ -15,7 +20,10 @@ from progressbar import ProgressBar
 from fuse import main_fuse
 import traceback
 import sys
+import os
 
+if not os.path.exists('./logs'):
+    os.makedirs('./logs')
 url = '/entity_fuse/'
 executor = ThreadPoolExecutor(1)
 
@@ -31,16 +39,16 @@ def func():
         merged_label = check(task_id)
     except Exception:
         print(__file__, sys._getframe().f_lineno, 'ERROR:', traceback.print_exc())
-        return jsonify({'state': 0, 'msg': "配置文件非法，查看控制台输出"})
+        return jsonify({'state': 1, 'msg': "配置文件非法，查看控制台输出"})
     print("一切正常")
     bar = ProgressBar(merged_label)
     bar.create()
     if bar.get() not in (1.0, 0.0):
-        return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
+        return jsonify({'state': 1, "msg": "当前有正在执行的任务，请等待其完成后重试"})
 
     # main_fuse(task_id)
     executor.submit(main_fuse, task_id)
-    return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
+    return jsonify({"state": 0, "msg": "正在后台进行融合任务"})
 
 
 @app.route(url + 'query_progress/', methods=['POST'])
@@ -48,7 +56,7 @@ def query_progress():
     task_id = request.json['task_id']
     _, _, _, merged_label = get_paras(task_id)
     bar = ProgressBar(merged_label)
-    return jsonify({'state': 1, 'msg': round(bar.get(), 2)})
+    return jsonify({'state': 0, 'msg': round(bar.get(), 2)})
 
 
 @app.route(url + 'initialize/', methods=['POST'])
@@ -58,7 +66,7 @@ def initialize():
     _, _, _, merged_label = get_paras(task_id)
     bar = ProgressBar(merged_label)
     bar.create()
-    return jsonify(({'state': 1, 'msg': '初始化状态成功'}))
+    return jsonify(({'state': 0, 'msg': '初始化状态成功'}))
 
 
 @app.errorhandler(HTTPException)
