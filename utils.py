@@ -17,7 +17,7 @@ from subgraphs import create_subgraph
 from text_sim_utils import sims
 
 logger = gen_logger('fuse.log', 1)
-logger.info('获取必要的信息...')
+logger.info('Get the necessary information...')
 cfg = ConfigParser()
 with open('./config_files/application.cfg', encoding='utf-8') as (f):
     cfg.read_file(f)
@@ -33,17 +33,17 @@ fused_entities = cfg.get('fuse', 'entities').split(',')
 if list(map(len, (cms, pms, gis))).count(0) == 1:
     if not gis:
         flag = 'cp'
-        logger.info('将融合cms和pms')
+        logger.info('will merge cms and pms')
     else:
         if not pms:
             flag = 'cg'
-            logger.info('将融合cms和gis')
+            logger.info('will merge cms and gis')
         else:
             flag = 'pg'
-            logger.info('将融合pms和gis')
+            logger.info('will merge pms and gis')
 else:
     flag = 'all'
-    logger.info('将进行三个系统的融合')
+    logger.info('Three systems will be merged')
 cms_entities = cfg.get('cms', 'entities').split(',')
 cms_rel = cfg.get('cms', 'relationships').split(',')
 cms_pros = cfg.get('cms', 'properties').split('&')
@@ -60,15 +60,15 @@ logger.info('Done')
 def fuse_and_create(args):
     """融合非根节点以外的节点，并创建新图"""
     label, res, cur, tot = args  # 新图的标签、父节点融合结果、当前第几个、一共多少个
-    logger.info(f'''进度:{(cur + 1)}/{tot}''')
+    logger.info(f'''Process:{(cur + 1)}/{tot}''')
     children = fuse_other_nodes(1, res)
     sub_graph = {'val': res, 'children': children}
-    logger.info('  将融合结果存至mysql...')
+    logger.info(' Save the fusion result to mysql...')
     save_to_mysql(sub_graph)
-    logger.info('  完成')
-    logger.info('  创建子图...')
+    logger.info('  Complete')
+    logger.info('  Create subgraph...')
     create_subgraph(label, sub_graph)
-    logger.info('  完成')
+    logger.info('  Complete')
 
 
 def fuse_root_nodes():
@@ -76,13 +76,13 @@ def fuse_root_nodes():
     ce, pe, ge = cms_entities[0], pms_entities[0], gis_entities[0]
     cp, pp, gp = get_property(0)
     w = eval(weight[0])
-    logger.info('获取根节点数据...')
+    logger.info('Get root node data...')
     cms_data = get_root_data(cms, ce, cp, w)
     pms_data = get_root_data(pms, pe, pp, w)
     gis_data = get_root_data(gis, ge, gp, w)
-    logger.info('完成')
+    logger.info('Complete')
     res = validate_data_and_fuse(0, cms_data, pms_data, gis_data)
-    logger.info('根节点融合完成')
+    logger.info('The root nodes fusion is complete')
     return res
 
 
@@ -269,17 +269,17 @@ def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
         None或者`compute_sim_and_combine`的输出
     """
     if not cms_data:
-        logger.warning(f'''{('  ' * i)}cms系统无数据''')
+        logger.warning(f'''{('  ' * i)}cms system has no data''')
         cms_data = None
     if not pms_data:
-        logger.warning(f'''{('  ' * i)}pms系统无数据''')
+        logger.warning(f'''{('  ' * i)}pms system has no data''')
         pms_data = None
     if not gis_data:
-        logger.warning(f'''{('  ' * i)}gis系统无数据''')
+        logger.warning(f'''{('  ' * i)}gis system has no data''')
         gis_data = None
     none_counts = sum(map(lambda x: x is None, (cms_data, pms_data, gis_data)))
     if none_counts == 3:
-        logger.warning(f'''{('  ' * i)}所有系统无数据''')
+        logger.warning(f'''{('  ' * i)}all system has no data''')
         return
     else:
         return compute_sim_and_combine(i, none_counts, cms_data, pms_data, gis_data)
@@ -301,13 +301,13 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
     computer = Computation(THRESHOLD)
     if none_counts == 1:
         if not cms_data:
-            logger.warning(f'''{('  ' * i)}计算两个系统的相似度(pms, gis)''')
+            logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (pms, gis)''')
             res = computer.compute(pms_data, gis_data)
-            logger.info(f'''{('  ' * i)}完成''')
+            logger.info(f'''{('  ' * i)}Complete''')
             if res is None:
-                logger.warning(f'''{('  ' * i)}不存在相似实体''')
+                logger.warning(f'''{('  ' * i)}No similar entities''')
                 return res
-            logger.info(f'''{('  ' * i)}组合实体的id...''')
+            logger.info(f'''{('  ' * i)}Combined the entities'id...''')
             for i_ in res:
                 i_.insert(0, None)
                 if i_[1] is not None:
@@ -315,16 +315,16 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
                 if i_[2] is not None:
                     i_[2] = gis_data[i_[2]]['id_']
 
-            logger.info(f'''{('  ' * i)}完成''')
+            logger.info(f'''{('  ' * i)}Complete''')
             return res
         if not pms_data:
-            logger.warning(f'''{('  ' * i)}计算两个系统的相似度(cms, gis)''')
+            logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (cms, gis)''')
             res = computer.compute(cms_data, gis_data)
-            logger.info(f'''{('  ' * i)}完成''')
+            logger.info(f'''{('  ' * i)}Complete''')
             if res is None:
-                logger.warning(f'''{('  ' * i)}不存在相似实体''')
+                logger.warning(f'''{('  ' * i)}No similar entities''')
                 return res
-            logger.info(f'''{('  ' * i)}组合实体的id...''')
+            logger.info(f'''{('  ' * i)}Combined the entities'id...''')
             for i_ in res:
                 i_.insert(1, None)
                 if i_[0] is not None:
@@ -332,15 +332,15 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
                 if i_[2] is not None:
                     i_[2] = gis_data[i_[2]]['id_']
 
-            logger.info(f'''{('  ' * i)}完成''')
+            logger.info(f'''{('  ' * i)}Complete''')
             return res
-        logger.warning(f'''{('  ' * i)}计算两个系统的相似度(cms, pms)''')
+        logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (cms, pms)''')
         res = computer.compute(cms_data, pms_data)
-        logger.info(f'''{('  ' * i)}完成''')
+        logger.info(f'''{('  ' * i)}Complete''')
         if res is None:
-            logger.warning(f'''{('  ' * i)}不存在相似实体''')
+            logger.warning(f'''{('  ' * i)}No similar entities''')
             return res
-        logger.info(f'''{('  ' * i)}组合实体的id...''')
+        logger.info(f'''{('  ' * i)}Combined the entities'id...''')
         for i_ in res:
             i_.insert(2, None)
             if i_[0] is not None:
@@ -348,10 +348,10 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
             if i_[1] is not None:
                 i_[1] = pms_data[i_[1]]['id_']
 
-        logger.info('完成')
+        logger.info('Complete')
         return res
     elif none_counts == 2:
-        logger.warning(f'''{('  ' * i)}只有一个系统有数据''')
+        logger.warning(f'''{('  ' * i)}Only one system has data''')
         res = []
         if cms_data is not None:
             for i in cms_data:
@@ -366,12 +366,12 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
                 res.append([None, None, i['id_']])
 
         return res
-    logger.info(f'''{('  ' * i)}开始计算相似度（三个系统）...''')
+    logger.info(f'''{('  ' * i)}Start calculating similarity (three systems)...''')
     res1 = computer.compute(cms_data, pms_data)
     res2 = computer.compute(cms_data, gis_data)
     res3 = computer.compute(pms_data, gis_data)
-    logger.info(f'''{('  ' * i)}完成''')
-    logger.info(f'''{('  ' * i)}组合实体的id...''')
+    logger.info(f'''{('  ' * i)}Complete''')
+    logger.info(f'''{('  ' * i)}Combined the entities'id...''')
     res = []
     for j in res1:
         if j.count(None) == 0:
@@ -399,7 +399,7 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
                             gis_id = gis_data[k[1]]['id_'] if k[1] is not None else None
                             res.append([cms_id, None, gis_id])
 
-    logger.info(f'''{('  ' * i)}完成''')
+    logger.info(f'''{('  ' * i)}Complete''')
     return res
 
 
@@ -407,7 +407,12 @@ def save_to_mysql(sub_graph):
     """将融合结果存入mysql"""
     now = datetime.datetime.now().strftime('%Y-%m-%d')
     conn = pymysql.connect(**eval(mysql))
+
     g = Graph(neo4j_url, auth=auth)
+
+    clean = f'delete from fuse_results'
+    conn.cursor().execute(clean)
+
     sql = f'''insert into fuse_results(period, cms_id, pms_id, gis_id, city_code, county_code, 
           gds_code, sys_type, equip_type) values 
           ('{now}', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')'''
