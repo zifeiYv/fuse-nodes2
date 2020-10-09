@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : utils.py                        #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/15                      #
-#                                                                   #
-#                     Last Update : 2020/07/27                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+File Name  : utils
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/15
+Describe   :
+    一些辅助类和函数
 """
 from collections import OrderedDict
 import numpy as np

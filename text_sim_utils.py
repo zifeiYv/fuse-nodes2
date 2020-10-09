@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : text_sim_utils.py               #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/14                      #
-#                                                                   #
-#                     Last Update : 2020/07/14                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+File Name  : text_sim_utils
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/14
+Describe   :
+    一些文本相似度计算的函数
 """
 import logging
 

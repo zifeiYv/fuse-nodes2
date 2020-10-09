@@ -1,30 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : app.py                          #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/16                      #
-#                                                                   #
-#                     Last Update : 2020/08/06                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+File Name  : app
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/16
+Describe   :
+    应用的启动入口
 """
 from self_check import check, get_paras
-from flask import Flask, jsonify, request
-from concurrent.futures import ProcessPoolExecutor
+from flask import Flask, jsonify, request, json
+from werkzeug.exceptions import HTTPException
+from concurrent.futures import ThreadPoolExecutor
 from progressbar import ProgressBar
 from fuse import main_fuse
 import traceback
 import sys
 
 url = '/entity_fuse/'
-executor = ProcessPoolExecutor(1)
+executor = ThreadPoolExecutor(1)
 
 app = Flask(__name__)
 
@@ -45,8 +38,8 @@ def func():
     if bar.get() not in (1.0, 0.0):
         return jsonify({'state': 0, "msg": "当前有正在执行的任务，请等待其完成后重试"})
 
-    main_fuse(task_id)
-    # executor.submit(main_fuse, task_id)
+    # main_fuse(task_id)
+    executor.submit(main_fuse, task_id)
     return jsonify({"state": 1, "msg": "正在后台进行融合任务"})
 
 
@@ -66,6 +59,21 @@ def initialize():
     bar = ProgressBar(merged_label)
     bar.create()
     return jsonify(({'state': 1, 'msg': '初始化状态成功'}))
+
+
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """Return JSON instead of HTML for HTTP errors."""
+    # start with the correct headers and status code from the error
+    response = e.get_response()
+    # replace the body with JSON
+    response.data = json.dumps({
+        "code": e.code,
+        "name": e.name,
+        "description": e.description,
+    })
+    response.content_type = "application/json"
+    return response
 
 
 if __name__ == '__main__':

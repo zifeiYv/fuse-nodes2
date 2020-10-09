@@ -1,22 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : progressbar.py                  #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/30                      #
-#                                                                   #
-#                     Last Update :                                 #
-#                                                                   #
-#-------------------------------------------------------------------#
-利用sqlite数据库来实现进度条功能。
-
-基本思路是，将每个进度条存储为一张表，每张进度条表只有一个字段，一行记录，用于记录/查询当前程序的进度。
+File Name  : progressbar
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/30
+Describe   :
+    利用sqlite数据库来实现进度条功能。
+    基本思路是，将每个进度条存储为一张表，每张进度条表只有一个字段，一行记录，用于记录/查询当前程序的进度。
 """
 import sqlite3
 import time

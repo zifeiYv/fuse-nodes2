@@ -1,29 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : log_utils.py                    #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/14                      #
-#                                                                   #
-#                     Last Update :                                 #
-#                                                                   #
-#-------------------------------------------------------------------#
-# Desc:                                                             #
-#                                                                   #
-#                                                                   #
-# Classes:                                                          #
-#                                                                   #
-#                                                                   #  
-# Functions:                                                        #
-#                                                                   #
-#                                                                   #
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+File Name  : log_utils
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/16
+Describe   :
+    日志记录器
 """
 import logging
 from logging.handlers import RotatingFileHandler

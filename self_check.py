@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : self_check.py                   #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/14                      #
-#                                                                   #
-#                     Last Update : 2020/08/25                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+File Name  : self_check
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/16
+Describe   :
+    开始融合任务前进行必要的检验
 """
 import pandas as pd
 from py2neo import Graph

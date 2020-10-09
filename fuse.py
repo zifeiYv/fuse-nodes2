@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : fuse.py                         #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                           Email : j.w.sun1992@gmail.com           #
-#                                                                   #
-#                      Start Date : 2020/07/14                      #
-#                                                                   #
-#                     Last Update : 2020/08/25                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+File Name  : fuse
+Author     : Jiawei Sun
+Email      : j.w.sun1992@gmail.com
+Start Date : 2020/07/14
+Describe   :
+    执行融合任务的主要函数和方法
 """
 import pandas as pd
 import numpy as np
@@ -25,10 +17,11 @@ from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
 from uuid import uuid1
-
+import json
+import requests
 
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-merged_label = ''
+fused_label = ''
 BASE_SYS_ORDER = {}
 cfg = ConfigParser()
 with open('./config_files/application.cfg') as f:
@@ -38,38 +31,69 @@ auth = eval(cfg.get('neo4j', 'auth'))
 threshold = float(cfg.get('threshold', 'threshold'))
 mysql_res = cfg.get('mysql', 'mysql_res')
 mysql_cfg = cfg.get('mysql', 'mysql_cfg')
+err_url = cfg.get('error_handler', 'url')
 
 
 def main_fuse(task_id):
-    global LABEL, PRO, TRANS, BASE_SYS_ORDER, merged_label
-    LABEL, PRO, TRANS, merged_label = get_paras(task_id)
+    global LABEL, PRO, TRANS, BASE_SYS_ORDER, fused_label
+    LABEL, PRO, TRANS, fused_label = get_paras(task_id)
+
     BASE_SYS_ORDER = sort_sys(LABEL)
-    bar = ProgressBar(merged_label)
+    bar = ProgressBar(fused_label)
     print("开始融合")
     print("删除旧的融合结果...")
-    delete_old(merged_label)
+    delete_old(fused_label)
     print("删除完成")
     print("正在融合根节点")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
     mapping, next_batch_no = get_save_mapping(task_id)
     counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
-    root_res_df = fuse_root_nodes()
-    if root_res_df.empty:
-        print("根节点融合后无结果，无法继续执行")
+    try:
+        root_res_df = fuse_root_nodes()
+    except Exception as e:
+        err_data = json.dumps({
+            "task_id": task_id,
+            "state": "xxx",
+            "msg": "根节点融合出错",
+            "value": e
+        })
+        requests.post(err_url, data=err_data)
+        return
     else:
-        print("根节点融合完成，开始融合子图")
-        base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
-        for i in range(len(root_res_df)):
-            bar.set((i + 1)/len(root_res_df))
-            node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
-            fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
-            a, b = caching(counter_only, counter_all, node)
-            counter_only.append(a)
-            counter_all.append(b)
-            create_node_and_rel(node)
-        save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
-        print("创建新图完成")
+        if root_res_df.empty:
+            print("根节点融合后无结果，无法继续执行")
+            err_data = json.dumps({
+                "task_id": task_id,
+                "state": "xxx",
+                "msg": "根节点融合后无结果",
+                "value": ""
+            })
+            requests.post(err_url, data=err_data)
+            return
+        else:
+            print("根节点融合完成，开始融合子图")
+            try:
+                base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
+                for i in range(len(root_res_df)):
+                    bar.set((i + 1)/len(root_res_df))
+                    node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
+                    fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
+                    a, b = caching(counter_only, counter_all, node)
+                    counter_only.append(a)
+                    counter_all.append(b)
+                    create_node_and_rel(node)
+                save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
+                print("创建新图完成")
+            except Exception as e:
+                err_data = json.dumps({
+                    "task_id": task_id,
+                    "state": "xxx",
+                    "msg": "执行过程中出错",
+                    "value": e
+                })
+                requests.post(err_url, data=err_data)
+                return
 
 
 def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
@@ -504,7 +528,7 @@ def create_node(tx, value: list, label: str, level: int):
                 if val:
                     tran_pros.add(p)
                     data[f'{p}'] = val
-    return Node(*[label, merged_label], **data)
+    return Node(*[label, fused_label], **data)
 
 
 def delete_old(label):
