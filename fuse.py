@@ -17,7 +17,6 @@ from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
 from uuid import uuid1
-import json
 import requests
 
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -53,24 +52,24 @@ def main_fuse(task_id):
         root_res_df = fuse_root_nodes()
     except Exception as e:
         print(e)
-        err_data = json.dumps({
+        err_data = {
             "task_id": task_id,
             "state": "1",
             "msg": "根节点融合出错",
             "progress": 0
-        })
-        requests.post(err_url, data=err_data)
+        }
+        requests.post(err_url, json=err_data)
         return
     else:
         if root_res_df.empty:
             print("根节点融合后无结果，无法继续执行")
-            err_data = json.dumps({
+            err_data = {
                 "task_id": task_id,
                 "state": "0",
                 "msg": "根节点融合后无结果",
                 "progress": 0
-            })
-            requests.post(err_url, data=err_data)
+            }
+            requests.post(err_url, json=err_data)
             return
         else:
             print("根节点融合完成，开始融合子图")
@@ -78,13 +77,13 @@ def main_fuse(task_id):
                 base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
                 for i in range(len(root_res_df)):
                     bar.set((i + 1)/len(root_res_df))
-                    progress_data = json.dumps({
+                    progress_data = {
                         "task_id": task_id,
                         "state": 2,
                         "msg": "执行中",
                         "progress": (i + 1)/len(root_res_df)
-                    })
-                    requests.post(err_url, data=progress_data)
+                    }
+                    requests.post(err_url, json=progress_data)
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
                     fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
                     a, b = caching(counter_only, counter_all, node)
@@ -93,22 +92,22 @@ def main_fuse(task_id):
                     create_node_and_rel(node)
                 save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
                 print("创建新图完成")
-                finish_data = json.dumps({
+                finish_data = {
                         "task_id": task_id,
                         "state": 0,
                         "msg": "执行完成",
                         "progress": 1
-                    })
-                requests.post(err_url, data=finish_data)
+                    }
+                requests.post(err_url, json=finish_data)
             except Exception as e:
                 print(e)
-                err_data = json.dumps({
+                err_data = {
                     "task_id": task_id,
                     "state": "1",
                     "msg": "执行过程中出错",
                     "progress": 0
-                })
-                requests.post(err_url, data=err_data)
+                }
+                requests.post(err_url, json=err_data)
                 return
 
 
