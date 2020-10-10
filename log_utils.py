@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-File Name  : log_utils
-Author     : Jiawei Sun
-Email      : j.w.sun1992@gmail.com
-Start Date : 2020/07/16
-Describe   :
-    日志记录器
+格式化一个日志记录器
 """
 import logging
 from logging.handlers import RotatingFileHandler

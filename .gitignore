@@ -4,6 +4,7 @@ logs/
 inputs.pkl
 multi.out
 build/
+doc/
 *.so
 *.c
 progressbar.db

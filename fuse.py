@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-File Name  : fuse
-Author     : Jiawei Sun
-Email      : j.w.sun1992@gmail.com
-Start Date : 2020/07/14
-Describe   :
-    执行融合任务的主要函数和方法
+====================
+执行融合任务的主要函数和方法
+====================
 """
 import pandas as pd
 import numpy as np
@@ -13,12 +10,13 @@ from py2neo import Graph, Node, Relationship
 from configparser import ConfigParser
 from utils import Nodes, sort_sys, Computation
 from self_check import get_paras
-from progressbar import ProgressBar
 from pymysql import connect
 from time import strftime
 from uuid import uuid1
 import requests
+from log_utils import gen_logger
 
+logger = None
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 fused_label = ''
 BASE_SYS_ORDER = {}
@@ -33,17 +31,40 @@ mysql_cfg = cfg.get('mysql', 'mysql_cfg')
 err_url = cfg.get('error_handler', 'url')
 
 
-def main_fuse(task_id):
+def main_fuse(task_id: str) -> None:
+    """ain function to run the fusion task.
+
+    The application receives an HTTP request as a start and then go to this
+    function to do the calculation.
+
+    This function has no return value and will send data, which is `dict` type
+    in Python, to specific url when needed. The keys of sent data are within
+    "task_id", "state", "msg", "progress", whose explaination are as follows::
+
+        "task_id": The unique identification of task.
+        "state": The state of task, and its possible values are 0(task ended normally),
+            1(some errors occur) and 2(task is in progress).
+        "msg": Message that helps to understand what is going on.
+        "progress": This tells the progress of task calculation when "state" is 2.
+
+    Args:
+        task_id: Unique identification of task
+
+    Returns:
+        None
+
+    """
+    global logger
+    logger = gen_logger(task_id)
     global LABEL, PRO, TRANS, BASE_SYS_ORDER, fused_label
     LABEL, PRO, TRANS, fused_label = get_paras(task_id)
 
     BASE_SYS_ORDER = sort_sys(LABEL)
-    bar = ProgressBar(fused_label)
-    print("开始融合")
-    print("删除旧的融合结果...")
+    logger.info("开始融合")
+    logger.info("删除旧的融合结果...")
     delete_old(fused_label)
-    print("删除完成")
-    print("正在融合根节点")
+    logger.info("删除完成")
+    logger.info("正在融合根节点")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
     mapping, next_batch_no = get_save_mapping(task_id)
     counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
@@ -51,7 +72,7 @@ def main_fuse(task_id):
     try:
         root_res_df = fuse_root_nodes()
     except Exception as e:
-        print(e)
+        logger.info(e)
         err_data = {
             "task_id": task_id,
             "state": "1",
@@ -62,7 +83,7 @@ def main_fuse(task_id):
         return
     else:
         if root_res_df.empty:
-            print("根节点融合后无结果，无法继续执行")
+            logger.info("根节点融合后无结果，无法继续执行")
             err_data = {
                 "task_id": task_id,
                 "state": "0",
@@ -72,11 +93,10 @@ def main_fuse(task_id):
             requests.post(err_url, json=err_data)
             return
         else:
-            print("根节点融合完成，开始融合子图")
+            logger.info("根节点融合完成，开始融合子图")
             try:
                 base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
                 for i in range(len(root_res_df)):
-                    bar.set((i + 1)/len(root_res_df))
                     progress_data = {
                         "task_id": task_id,
                         "state": 2,
@@ -91,7 +111,7 @@ def main_fuse(task_id):
                     counter_all.append(b)
                     create_node_and_rel(node)
                 save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
-                print("创建新图完成")
+                logger.info("创建新图完成")
                 finish_data = {
                         "task_id": task_id,
                         "state": 0,
@@ -100,7 +120,7 @@ def main_fuse(task_id):
                     }
                 requests.post(err_url, json=finish_data)
             except Exception as e:
-                print(e)
+                logger.info(e)
                 err_data = {
                     "task_id": task_id,
                     "state": "1",
@@ -121,35 +141,42 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
     最后再将融合结果统一整理。
 
     假设有5个系统需要融合：
-              | sys1 | sys2 | sys3 | sys4 | sys5 |
-        ------|------|------|------|------|------|
-        level1| Ent  | Ent  | Ent  | Ent  | Ent  |
-        ------|------|------|------|------|------|
-        ...
+
+    +------+-----+-----+-----+-----+-----+
+    |      |sys1 |sys2 |sys3 |sys4 |sys5 |
+    +======+=====+=====+=====+=====+=====+
+    |level1|Ent  |Ent  |Ent  |Ent  |Ent  |
+    +------+-----+-----+-----+-----+-----+
+    |...   |...  |...  |...  |...  |...  |
+    +------+-----+-----+-----+-----+-----+
+
     根节点的融合只需要考察1级实体的标签即可。
 
     第一步：
-        假设通过判断后，sys1为基准系统，其他为目标系统，则需要分别计算sys1与其他系统
-        之间的节点的相似度。由于sys1是基准系统，那么其他系统中判定为与sys1为相同实体
+        假设通过判断后， ``sys1`` 为基准系统，其他为目标系统，则需要分别计算 ``sys1`` 与其他系统
+        之间的节点的相似度。由于 ``sys1`` 是基准系统，那么其他系统中判定为与 ``sys1`` 为相同实体
         的节点之间自动判定为相同实体。
     第二步：
         在基准系统与其他系统融合的结果中，只保证全部包含基准系统中的节点，不必全部包含
-        其他系统的节点。如sys1与sys2的结果，若sys1中有3个节点，sys2中有四个节点，那
-        么其融合结果可以是：[[0, 1], [1, None], [2, 2]]
+        其他系统的节点。如 ``sys1`` 与 ``sys2`` 的结果，若 ``sys1`` 中有3个节点，``sys2`` 中
+        有四个节点，那么其融合结果可以是： ``[[0, 1], [1, None], [2, 2]]``
     第三步：
-        将两两系统的融合结果进行组合与拼接，其结果格式如下：
-        [[0, 1, None, None, 1],
-         [1, None, 1, 2, 0],
-         [2, 2, 2, 0, 2]]
-        注意，其中存储的数字为从Neo4j中读取的节点数据（以列表存储）的序号，需要根据序
-        号查找到对应的节点的id，形成新的矩阵。
+        将两两系统的融合结果进行组合与拼接，其结果格式如下：::
+
+            [[0, 1, None, None, 1],
+             [1, None, 1, 2, 0],
+             [2, 2, 2, 0, 2]]
+
+        注意，其中存储的数字为从 `Neo4j` 中读取的节点数据（以列表存储）的序号，需要根据序
+        号查找到对应的节点的 `id` ，形成新的矩阵。
     第四步：
-        移除sys1，重新寻找基准系统和目标系统，并重复上述三步骤。注意，在获取数据时，不
-        再获取已经在上次迭代中匹配到的节点，对第三步得到的结果应该以None填充上一次迭代
-        中标准系统的所在列，在本例中，为第一列：
-        [[None, 0, 0, None, None],
-         [None, 3, 3, 1, None],
-         [None, 4, 4, None, None]]
+        移除 ``sys1`` ，重新寻找基准系统和目标系统，并重复上述三步骤。注意，在获取数据时，不
+        再获取已经在上次迭代中匹配到的节点，对第三步得到的结果应该以 ``None`` 填充上一次迭代
+        中标准系统的所在列，在本例中，为第一列：::
+
+            [[None, 0, 0, None, None],
+             [None, 3, 3, 1, None],
+             [None, 4, 4, None, None]]
 
     Args:
         label: 记录系统及其包含实体的DataFrame
@@ -157,6 +184,7 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
         not_extract(dict): 存储对应系统中不被抽取的节点的id
 
     Returns:
+        ``pd.DataFrame``
 
     """
     # 获取基准系统的信息
@@ -206,7 +234,7 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
 def fuse_other_nodes(level: int, node, sorted_sys: dict):
     """通过递归的方式，根据给出的根节点融合结果，对其下所有可能的节点进行融合。
 
-    此函数没有返回值，而是将对传入的node参数进行改写，以不断挂接新的子节点。
+    此函数没有返回值，而是将对传入的 ``node`` 对象进行改写，以不断挂接新的子节点。
 
     Args:
         level: 指定当前是第几级实体，用于控制递归的进行，0表示根节点，依次递加
@@ -214,6 +242,7 @@ def fuse_other_nodes(level: int, node, sorted_sys: dict):
         sorted_sys: 配置文件中基准系统的选取序列
 
     Returns:
+        None
 
     """
     if level == LABEL.shape[0]:  # 已经到达最后一级实体
@@ -236,7 +265,7 @@ def fuse_other_nodes(level: int, node, sorted_sys: dict):
 
 
 def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
-    """从图数据库获取数据。
+    """从图数据库获取数据（用于融合根节点的数据）。
 
     Args:
         sys_label: 来源系统的标签
@@ -281,6 +310,7 @@ def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extrac
             最后再合并
 
     Returns:
+        list
 
     """
     if not_extract is None:
@@ -330,23 +360,26 @@ def combine_sim(similarities: dict, base_sys_lab: str):
     """将基准系统与目标系统的融合结果进行拼接，形成最后的融合结果。
 
     Args:
-        similarities: 记录基准系统与目标系统之间的相似性结果，其内容格式如下：
-            {
-                "target_system_label_1": {
-                    0: 99,
-                    1: 89,
-                    2: np.nan
-                },
-                "target_system_label_2": {
-                    0: 45,
-                    1: np.nan,
-                    2: 34
+        similarities: 记录基准系统与目标系统之间的相似性结果，其内容格式如下：::
+
+                {
+                    "target_system_label_1": {
+                        0: 99,
+                        1: 89,
+                        2: np.nan
+                    },
+                    "target_system_label_2": {
+                        0: 45,
+                        1: np.nan,
+                        2: 34
+                    }
                 }
-            }
+
             外层字典的键，是目标系统的标签；每个内层系统的键都是一样的，为基准系统中待融合的实体的id。
         base_sys_lab: 基准系统的标签
 
     Returns:
+        ``pd.DataFrame``
 
     """
     res = []
@@ -366,7 +399,16 @@ def combine_sim(similarities: dict, base_sys_lab: str):
 
 
 def no_similarity(base_data: list, base_sys_lab: str):
-    """在没有获取到目标系统标签或目标系统数据后，返回本内容"""
+    """在没有获取到目标系统标签或目标系统数据后，返回本内容。
+
+    Args:
+        base_data: 基准系统的数据列表
+        base_sys_lab: 基准系统的标签
+
+    Returns:
+        ``pd.DataFrame``
+
+    """
     res = []
     for i in base_data:
         _l = []
@@ -499,6 +541,9 @@ def create_node_and_rel(node):
         if isinstance(nodes, list):
             return
         data = nodes.children
+        if not data:
+            tx.create(p_node)
+            return
         for j in data:  # j也是一个`trie.Nodes`对象
             node_ = create_node(tx, j.value, j.label, i)
             rel = j.rel
@@ -591,7 +636,7 @@ def caching(counter_only: pd.DataFrame, counter_all: pd.DataFrame, node: Nodes, 
         - 独有的数量
         - 共有的数量
     """
-    if node.value.count(None) == len(node.value) - 1:
+    if pd.Series(node.value).count() == 1:
         for i in range(len(node.value)):
             if i is not None:
                 counter_only.iloc[level, i] += 1
