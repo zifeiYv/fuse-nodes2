@@ -61,6 +61,11 @@ def handle_exception(e):
     return response
 
 
+@app.route('/null', methods=['POST'])
+def handle_progress():
+    return ''
+
+
 if __name__ == '__main__':
     # 生成环境下启动使用`gunicorn -c gunicorn_config.py app:app`
     app.run('0.0.0.0')

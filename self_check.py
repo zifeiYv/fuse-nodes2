@@ -6,6 +6,7 @@ import pandas as pd
 from py2neo import Graph
 from pymysql import connect
 from configparser import ConfigParser
+from log_utils import gen_logger
 
 
 cfg = ConfigParser()
@@ -23,6 +24,7 @@ class CheckError(Exception):
 
 def check(task_id):
     """用于检查参数有效性的函数"""
+    logger = gen_logger(task_id)
     # 数据库连接是否正常
     for i in (mysql_res, mysql_cfg):
         try:
@@ -34,12 +36,12 @@ def check(task_id):
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
-    print(f"共指定了{sys_num}个系统，其标签分别为：{list(sys_labels)}")
+    logger.info(f"共指定了{sys_num}个系统，其标签分别为：{list(sys_labels)}")
     if sys_num < 2:
         raise CheckError("至少需要指定两个系统才能进行融合")
 
     ent_num = label.shape[0]
-    print(f"共指定了{ent_num}种实体")
+    logger.info(f"共指定了{ent_num}种实体")
 
     for df in ['pro', 'trans']:
         df_ = eval(df)

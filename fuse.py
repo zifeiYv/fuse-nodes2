@@ -32,7 +32,7 @@ err_url = cfg.get('error_handler', 'url')
 
 
 def main_fuse(task_id: str) -> None:
-    """ain function to run the fusion task.
+    """Main function to run the fusion task.
 
     The application receives an HTTP request as a start and then go to this
     function to do the calculation.
@@ -103,13 +103,13 @@ def main_fuse(task_id: str) -> None:
                         "msg": "执行中",
                         "progress": (i + 1)/len(root_res_df)
                     }
-                    requests.post(err_url, json=progress_data)
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
                     fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
                     a, b = caching(counter_only, counter_all, node)
                     counter_only.append(a)
                     counter_all.append(b)
                     create_node_and_rel(node)
+                    _ = requests.post(err_url, json=progress_data)
                 save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
                 logger.info("创建新图完成")
                 finish_data = {
