@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-@Time   : 2020/6/28 10:55 上午
-@Author : sunjiawei
-@E-mail : j.w.sun1992@gmail.com
+=============
+执行融合的主程序
+=============
 """
 import argparse
 from self_test import check
@@ -45,4 +45,3 @@ if __name__ == '__main__':
             p.apply_async(fuse_and_create, args=((label, root_results[i], i, len(root_results)),))
         p.close()
         p.join()
-

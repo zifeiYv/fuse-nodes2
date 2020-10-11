@@ -488,7 +488,7 @@ class Computation:
             None或者融合结果列表。
         
         """
-        sim = np.zeros(shape=(len(data1), len(data2)), dtype=np.int8)
+        sim = np.zeros(shape=(len(data1), len(data2)), dtype=np.float16)
         for i in range(len(data1)):
             for j in range(len(data2)):
                 sim[(i, j)] = self.__compute(data1[i], data2[j])
