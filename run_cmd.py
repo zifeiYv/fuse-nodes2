@@ -43,3 +43,6 @@ if __name__ == '__main__':
         p = Pool(processes=processes)
         for i in range(len(root_results)):
             p.apply_async(fuse_and_create, args=((label, root_results[i], i, len(root_results)),))
+        p.close()
+        p.join()
+
