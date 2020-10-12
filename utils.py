@@ -66,7 +66,7 @@ class Computation:
             None/List
 
         """
-        sim = np.zeros(shape=(len(base_data), len(tar_data)))
+        sim = np.zeros(shape=(len(base_data), len(tar_data)), dtype=np.float16)
         for i in range(len(base_data)):
             for j in range(len(tar_data)):
                 sim[i, j] = self.__compute(base_data[i], tar_data[j])
