@@ -151,11 +151,13 @@ def check():
         raise
     neo4j_url = cfg.get('neo4j', 'url')
     auth = eval(cfg.get('neo4j', 'auth'))
+    processes = cfg.getint('distributed', 'processes')
     try:
         graph = Graph(neo4j_url, auth=auth)
         graph.run('return "OK"')
     except Exception:
         raise
+    return processes
 
 
 if __name__ == '__main__':
