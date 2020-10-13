@@ -23,26 +23,26 @@ if not label:
     label = 'merge'
 
 if __name__ == '__main__':
-    logger.info("检查配置文件...")
+    logger.info("Check the configuration file...")
     processes = check()
-    logger.info("完成\n")
-    logger.info("删除旧结果...")
+    logger.info("Complete\n")
+    logger.info("Delete old results...")
     delete_old(label)
-    logger.info("删除完成\n")
+    logger.info("Complete delete\n")
 
     cfg = ConfigParser()
 
     with open('./config_files/application.cfg', encoding='utf-8') as f:
         cfg.read_file(f)
 
-    logger.info("开始融合")
+    logger.info("Start to fuse")
     from utils import fuse_root_nodes, fuse_and_create
     root_results = fuse_root_nodes()
 
     if root_results is None:
-        logger.warning("根节点融合后无数据")
+        logger.warning("Root nodes has no data after fused")
     else:
-        logger.info("开始融合子节点...")
+        logger.info("Start to fuse subgraphs...")
         if processes == 1:
             print("单进程融合")
             for i in range(len(root_results)):
