@@ -33,17 +33,17 @@ fused_entities = cfg.get('fuse', 'entities').split(',')
 if list(map(len, (cms, pms, gis))).count(0) == 1:
     if not gis:
         flag = 'cp'
-        logger.info('将融合cms和pms')
+        logger.warning('配置融合cms和pms')
     else:
         if not pms:
             flag = 'cg'
-            logger.info('将融合cms和gis')
+            logger.warning('配置融合cms和gis')
         else:
             flag = 'pg'
-            logger.info('将融合pms和gis')
+            logger.warning('配置融合pms和gis')
 else:
     flag = 'all'
-    logger.info('将进行三个系统的融合')
+    logger.info('配置融合三个系统')
 cms_entities = cfg.get('cms', 'entities').split(',')
 cms_rel = cfg.get('cms', 'relationships').split(',')
 cms_pros = cfg.get('cms', 'properties').split('&')
@@ -54,7 +54,7 @@ gis_entities = cfg.get('gis', 'entities').split(',')
 gis_rel = cfg.get('gis', 'relationships').split(',')
 gis_pros = cfg.get('gis', 'properties').split('&')
 weight = cfg.get('weight', 'weight').split('&')
-logger.info('Done')
+logger.info('配置文件读取完成\n')
 
 
 def fuse_and_create(args):
@@ -76,11 +76,13 @@ def fuse_root_nodes():
     ce, pe, ge = cms_entities[0], pms_entities[0], gis_entities[0]
     cp, pp, gp = get_property(0)
     w = eval(weight[0])
+    logger.info('*****融合根节点*****')
     logger.info('获取根节点数据...')
     cms_data = get_root_data(cms, ce, cp, w)
     pms_data = get_root_data(pms, pe, pp, w)
     gis_data = get_root_data(gis, ge, gp, w)
     logger.info('完成')
+    logger.info('开始融合...')
     res = validate_data_and_fuse(0, cms_data, pms_data, gis_data)
     logger.info('根节点融合完成')
     return res
@@ -214,6 +216,9 @@ def get_root_data(sys, ent, prop, w):
         count += 1
 
     cypher = cypher[:-2]
+    # # 临时
+    # cypher += ' limit 10'
+    # #
     data = graph.run(cypher).data()
     return data
 
@@ -269,13 +274,13 @@ def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
         None或者`compute_sim_and_combine`的输出
     """
     if not cms_data:
-        logger.warning(f'''{('  ' * i)}cms系统无数据''')
+        # logger.warning(f'''{('  ' * i)}cms系统无数据''')
         cms_data = None
     if not pms_data:
-        logger.warning(f'''{('  ' * i)}pms系统无数据''')
+        # logger.warning(f'''{('  ' * i)}pms系统无数据''')
         pms_data = None
     if not gis_data:
-        logger.warning(f'''{('  ' * i)}gis系统无数据''')
+        # logger.warning(f'''{('  ' * i)}gis系统无数据''')
         gis_data = None
     none_counts = sum(map(lambda x: x is None, (cms_data, pms_data, gis_data)))
     if none_counts == 3:
@@ -488,10 +493,19 @@ class Computation:
             None或者融合结果列表。
         
         """
-        sim = np.zeros(shape=(len(data1), len(data2)), dtype=np.float16)
-        for i in range(len(data1)):
-            for j in range(len(data2)):
-                sim[(i, j)] = self.__compute(data1[i], data2[j])
+        len1, len2 = len(data1), len(data2)
+        # 使相似度矩阵的行数总是大于（等于）列数
+        if len1 >= len2:
+            row, rdata, col, cdata = len1, data1, len2, data2
+        else:
+            row, rdata, col, cdata = len2, data2, len1, data1
+
+        sim = np.zeros(shape=(row, col), dtype=np.float16)
+        for i in range(row):
+            if i % 100 == 0:
+                logger.info(f"进度：{(i+1)*100/row:.2f}% ")
+            for j in range(col):
+                sim[(i, j)] = self.__compute(rdata[i], cdata[j])
         return self.__matching(sim)
 
     @staticmethod
