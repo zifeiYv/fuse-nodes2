@@ -410,7 +410,7 @@ def save_to_mysql(sub_graph):
 
     g = Graph(neo4j_url, auth=auth)
 
-    clean = f'delete * from fuse_results'
+    clean = f'delete from fuse_results'
     conn.cursor().execute(clean)
 
     sql = f'''insert into fuse_results(period, cms_id, pms_id, gis_id, city_code, county_code, 
