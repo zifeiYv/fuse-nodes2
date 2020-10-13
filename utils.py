@@ -541,7 +541,8 @@ class Computation:
         Args:
             sim_matrix: 相似度矩阵
 
-        Returns: 嵌套的列表
+        Returns:
+            None或者嵌套的列表
 
         """
         res = self.__match(sim_matrix)
@@ -569,24 +570,30 @@ class Computation:
         Args:
             sim_matrix: 相似度矩阵
         
-        Returns: None或嵌套的列表
+        Returns:
+            None或嵌套的列表
         
         """
         if np.sum(sim_matrix) == 0:
             return
-        res = []
+        res = []  # 存储匹配结果对
+
+        # 每一列的最大值：len(arg0) == sim.shape[1]
         arg0 = sim_matrix.argmax(axis=0)
+
+        # 每一行的最大值：len(arg0) == sim.shape[0]
         arg1 = sim_matrix.argmax(axis=1)
-        for i in range(len(arg0)):
-            if sim_matrix[(arg0[i], i)] < self.thresh:
-                sim_matrix[:, i] = 0
-                if [None, i] not in res:
-                    res.append([None, i])
-            else:
-                if arg1[arg0[i]] == i:
-                    res.append([arg0[i], i])
-                    sim_matrix[:, i] = 0
-                    sim_matrix[arg0[i]] = 0
+
+        for i in range(len(arg0)):                      # 按列数遍历
+            if sim_matrix[(arg0[i], i)] < self.thresh:  # 该列最大的值仍小于阈值
+                sim_matrix[:, i] = 0                    # 将该列所有值置为0
+                if [None, i] not in res:                # 已有结果对列表中不存在
+                    res.append([None, i])               # 追加到结果对列表中
+            else:                                       # 该列最大的值大于阈值
+                if arg1[arg0[i]] == i:                  # 而且列最大值所在的行的最大值也是该值
+                    res.append([arg0[i], i])            # 添加到结果对中
+                    sim_matrix[:, i] = 0                # 将该列所有值置为0
+                    sim_matrix[arg0[i]] = 0             # 将该行所有值置为0
 
         r = self.__match(sim_matrix)
         if r:
