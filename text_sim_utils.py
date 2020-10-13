@@ -3,7 +3,9 @@ u"""
 @Author : sunjiawei
 @E-mail : j.w.sun1992@gmail.com
 """
-import Levenshtein as Lvst, numpy as np, jieba
+import Levenshtein as Lvst
+import jieba
+import numpy as np
 
 
 def lvst_dis(string1, string2):
@@ -95,8 +97,7 @@ def sims(string1, string2, methods=None):
     else:
         sim = 0
         if not methods:
-            methods = {'lvst':1, 
-             'lcs':0,  'cos':0}
+            methods = {'lvst': 1, 'lcs': 0, 'cos': 0}
         else:
             if sum(methods.values()) != 1:
                 raise UnNormalizedWeight("Sum of three methods' weight must be 1")

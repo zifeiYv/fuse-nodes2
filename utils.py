@@ -502,7 +502,7 @@ class Computation:
 
         sim = np.zeros(shape=(row, col), dtype=np.float16)
         for i in range(row):
-            if i % 100 == 0:
+            if i % 100 == 0 and i != 0:
                 logger.info(f"进度：{(i+1)*100/row:.2f}% ")
             for j in range(col):
                 sim[(i, j)] = self.__compute(rdata[i], cdata[j])
@@ -574,7 +574,7 @@ class Computation:
             None或嵌套的列表
         
         """
-        if np.sum(sim_matrix) == 0:
+        if np.sum(sim_matrix, dtype=np.float64) == 0:
             return
         res = []  # 存储匹配结果对
 
