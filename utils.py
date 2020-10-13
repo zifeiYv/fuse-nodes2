@@ -16,7 +16,7 @@ from gen_logger import gen_logger
 from subgraphs import create_subgraph
 from text_sim_utils import sims
 
-logger = gen_logger('fuse.log', 1)
+logger = gen_logger('fuse.log', True)
 logger.info('获取必要的信息...')
 cfg = ConfigParser()
 with open('./config_files/application.cfg', encoding='utf-8') as (f):
