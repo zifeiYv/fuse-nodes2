@@ -5,9 +5,12 @@
 @E-mail : j.w.sun1992@gmail.com
 """
 import logging
-from logging.handlers import RotatingFileHandler
 from logging import StreamHandler
 import os
+try:
+    from concurrent_log_handler import ConcurrentRotatingFileHandler as RotFilHan
+except ImportError:
+    from logging.handlers import RotatingFileHandler as RotFilHan
 
 
 def gen_logger(log_file_name, console_printing=False):
@@ -27,7 +30,7 @@ def gen_logger(log_file_name, console_printing=False):
     logger.setLevel(logging.INFO)
     if not logger.handlers:  # 避免重复添加handler
         console = StreamHandler()
-        handler = RotatingFileHandler(log_file_name, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
+        handler = RotFilHan(log_file_name, maxBytes=10 * 1024 * 1024, backupCount=5, encoding='utf-8')
         formatter = logging.Formatter(
             '%(process)d %(asctime)s %(levelname)7s %(filename)10s %(lineno)3d | %(message)s ',
             datefmt='%Y-%m-%d %H:%M:%S')
