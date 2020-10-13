@@ -55,11 +55,16 @@ def create_subgraph(label, sub_graph):
     root_node = generate_node([fused_entities[0], label], fused_pros[0], *sub_graph['val'])
     tx.create(root_node)
 
+    # 将根节点对应的原始节点上挂接的其他关系迁移到融合后的根节点上
+    rel_transfer(root_node, 0)
+
     def func(parent_node, graph_data, i):
         data = graph_data['children']
         for k in data:
             node = generate_node([fused_entities[i], label], fused_pros[i], *data[k]['val'])
             tx.create(node)
+            # 将非根节点对应的原始节点上挂接的其他关系迁移到融合后的根节点上
+            rel_transfer(node, i)
             rel = fused_rel[i - 1]
             tx.create(Relationship(parent_node, rel, node))
             if data[k]['children'] == {}:
@@ -101,6 +106,44 @@ def generate_node(label, pros, node_id1=None, node_id2=None, node_id3=None):
         data[f'{p}'] = val
 
     return Node(*label, **data)
+
+
+def rel_transfer(node: Node, node_level: int):
+    """获取node中的原始节点的信息，查询与之关连的节点，除去待融合的子节点后，挂接到node上。
+
+    Args:
+        node: 节点对象
+        node_level: 节点等级，用于判断哪些关系不迁移，取值为0（变压器）或1（线路）
+
+    Returns:
+
+    """
+    graph = Graph(neo4j_url, auth=auth)
+    data = dict(node.items()).values()
+    if node_level == 0:
+        not_trans_rel = 'Associate'
+    elif node_level == 1:
+        not_trans_rel = 'Include'
+    else:
+        not_trans_rel = ''
+
+    for id_ in data:
+        if not id_:
+            continue
+        all_rel = graph.run(f"match(n)-[r]-() where id(n)={id_} return distinct type(r) as r").data()
+        all_rel = list(map(lambda x: x['r'], all_rel))
+        if not_trans_rel:
+            all_rel.remove(not_trans_rel)
+        trans_rel = all_rel
+        if not trans_rel:
+            return
+        cypher = f'match(n)-[r]-(m) where id(n)={id_} and type(r) in {str(trans_rel)} return id(m) ' \
+                 f'as id_'
+        ids = graph.run(cypher).data()
+        ids = map(lambda x: x['id_'], ids)
+        for id__ in ids:
+            graph.run(f"match(n),(m) where id(n)={node.identity} and id(m)={id__} "
+                      f"create(n)-[r:trans_rel]->(m)")
 
 
 if __name__ == '__main__':
