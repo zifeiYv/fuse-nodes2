@@ -256,7 +256,7 @@ def get_data(graph_, father, sys, sys_type, ent, prop, w, i):
 
 
 def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
-    """根据获取到的数据判断各个系统真实的数据情况，在符合融合条件（至少由两个系统由数据）时，
+    """根据获取到的数据判断各个系统真实的数据情况，在符合融合条件（至少有两个系统有数据）时，
     调用`compute_sim_and_combine`
     
     Args:

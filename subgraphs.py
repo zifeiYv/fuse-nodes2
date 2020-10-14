@@ -121,11 +121,11 @@ def rel_transfer(node: Node, node_level: int):
     graph = Graph(neo4j_url, auth=auth)
     data = dict(node.items())
     if node_level == 0:
-        not_trans_rel = 'Associate'
+        not_trans_rel = {'Associate'}
     elif node_level == 1:
-        not_trans_rel = 'Include'
+        not_trans_rel = {'Include', 'Associate'}
     else:
-        not_trans_rel = ''
+        not_trans_rel = {'Include'}
 
     for id_ in data:
         if not data[id_]:
@@ -133,13 +133,9 @@ def rel_transfer(node: Node, node_level: int):
         if id_ not in ['cmsId', 'pmsId', 'gisId']:
             continue
         all_rel = graph.run(f"match(n)-[r]-() where id(n)={data[id_]} return distinct type(r) as r").data()
-        all_rel = list(map(lambda x: x['r'], all_rel))
-        if not_trans_rel:
-            try:
-                all_rel.remove(not_trans_rel)
-            except ValueError:
-                pass
-        trans_rel = all_rel
+        all_rel = set(list(map(lambda x: x['r'], all_rel)))
+        all_rel = all_rel - not_trans_rel
+        trans_rel = list(all_rel)
         if not trans_rel:
             return
         cypher = f'match(n)-[r]-(m) where id(n)={data[id_]} and type(r) in {str(trans_rel)} return id(m) ' \
