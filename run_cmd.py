@@ -10,6 +10,8 @@ from subgraphs import delete_old
 from configparser import ConfigParser
 from multiprocessing import Pool
 from gen_logger import gen_logger
+import pymysql
+
 
 logger = gen_logger('fuse.log', True)
 
@@ -23,17 +25,23 @@ if not label:
     label = 'merge'
 
 if __name__ == '__main__':
-    logger.info("Check the configuration file...")
-    processes = check()
-    logger.info("Complete\n")
-    logger.info("Delete old results...")
-    delete_old(label)
-    logger.info("Complete delete\n")
-
     cfg = ConfigParser()
 
     with open('./config_files/application.cfg', encoding='utf-8') as f:
         cfg.read_file(f)
+    mysql = cfg.get('mysql', 'mysql')
+    conn = pymysql.connect(**eval(mysql))
+
+    logger.info("Check the configuration file...")
+    processes = check()
+    logger.info("Done\n")
+    logger.info("Delete old results in Neo4j...")
+    delete_old(label)
+    logger.info("Done\n")
+    logger.info("Delete old results in MySQL...")
+    conn.cursor().execute('delete from fuse_results')
+    conn.close()
+    logger.info("Done\n")
 
     logger.info("Start to fuse")
     from utils import fuse_root_nodes, fuse_and_create

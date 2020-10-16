@@ -63,7 +63,7 @@ def fuse_and_create(args):
     logger.info(f'''Process:{(cur + 1)}/{tot}''')
     children = fuse_other_nodes(1, res)
     sub_graph = {'val': res, 'children': children}
-    logger.info(' Save the fusion result to mysql...')
+    logger.info('  Save the fusion result to mysql...')
     save_to_mysql(sub_graph)
     logger.info('  Complete')
     logger.info('  Create subgraph...')
@@ -269,17 +269,17 @@ def validate_data_and_fuse(i, cms_data, pms_data, gis_data):
         None或者`compute_sim_and_combine`的输出
     """
     if not cms_data:
-        logger.warning(f'''{('  ' * i)}cms system has no data''')
+        logger.debug(f'''{('  ' * i)}cms system has no data''')
         cms_data = None
     if not pms_data:
-        logger.warning(f'''{('  ' * i)}pms system has no data''')
+        logger.debug(f'''{('  ' * i)}pms system has no data''')
         pms_data = None
     if not gis_data:
-        logger.warning(f'''{('  ' * i)}gis system has no data''')
+        logger.debug(f'''{('  ' * i)}gis system has no data''')
         gis_data = None
     none_counts = sum(map(lambda x: x is None, (cms_data, pms_data, gis_data)))
     if none_counts == 3:
-        logger.warning(f'''{('  ' * i)}all system has no data''')
+        logger.debug(f'''{('  ' * i)}all system has no data''')
         return
     else:
         return compute_sim_and_combine(i, none_counts, cms_data, pms_data, gis_data)
@@ -409,9 +409,6 @@ def save_to_mysql(sub_graph):
     conn = pymysql.connect(**eval(mysql))
 
     g = Graph(neo4j_url, auth=auth)
-
-    clean = f'delete from fuse_results'
-    conn.cursor().execute(clean)
 
     sql = f'''insert into fuse_results(period, cms_id, pms_id, gis_id, city_code, county_code, 
           gds_code, sys_type, equip_type) values 
