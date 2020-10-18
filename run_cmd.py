@@ -8,7 +8,7 @@ import argparse
 from self_test import check
 from subgraphs import delete_old
 from configparser import ConfigParser
-from multiprocessing import Pool
+# from multiprocessing import Pool
 from gen_logger import gen_logger
 import pymysql
 
@@ -23,6 +23,11 @@ args = parser.parse_args()
 label = args.new_label
 if not label:
     label = 'merge'
+
+
+class NotSupportError(Exception):
+    pass
+
 
 if __name__ == '__main__':
     cfg = ConfigParser()
@@ -40,6 +45,7 @@ if __name__ == '__main__':
     logger.info("Done\n")
     logger.info("Delete old results in MySQL...")
     conn.cursor().execute('delete from fuse_results')
+    conn.commit()
     conn.close()
     logger.info("Done\n")
 
@@ -57,9 +63,10 @@ if __name__ == '__main__':
                 fuse_and_create((label, root_results[i], i, len(root_results)))
         else:
             print("多进程融合")
-            p = Pool(processes=processes)
-            for i in range(len(root_results)):
-                p.apply_async(fuse_and_create, args=((label, root_results[i], i, len(root_results)),))
-            p.close()
-            p.join()
+            raise NotSupportError("Fusing use multi processes is not supported for now.")
+            # p = Pool(processes=processes)
+            # for i in range(len(root_results)):
+            #     p.apply_async(fuse_and_create, args=((label, root_results[i], i, len(root_results)),))
+            # p.close()
+            # p.join()
     print("融合完成")
