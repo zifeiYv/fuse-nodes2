@@ -54,6 +54,9 @@ class Computation:
     def __init__(self, thresh=0.75):
         """判定为同一对象的阈值，默认为0.75，可以通过配置文件修改"""
         self.thresh = thresh
+        self.match_res = []
+        self.x = []
+        self.y = []
 
     def compute(self, base_data, tar_data):
         """对外提供的计算相似度的方法接口。
@@ -106,27 +109,27 @@ class Computation:
             None或者一个嵌套的列表
 
         """
-        if np.sum(sim_matrix) == 0:
-            return None
-        res = []
-        args0 = sim_matrix.argmax(axis=0)  # 每一列的最大值位置
-        args1 = sim_matrix.argmax(axis=1)  # 每一行的最大值位置
-        for i in range(len(args1)):
-            if sim_matrix[i, args1[i]] < self.thresh:  # 第i行的最大的相似度小于阈值
-                sim_matrix[i, :] = 0  # 整行设置为0
-                if [i, None] not in res:
-                    res.append([i, None])  # `base_data`中的第i个实体在`tar_data`中无匹配的实体
-            else:
-                if args0[args1[i]] == i:  # 第i行的最大的相似度的值刚好也是该值所在列的最大值
-                    res.append([i, args1[i]])  # 结果匹配
-                    sim_matrix[i, :] = 0  # 匹配完成后，整行设置为0
-                    sim_matrix[:, args1[i]] = 0  # 整列也设置为0
+        if np.sum(sim_matrix, dtype=np.float64) == 0:
+            return
 
-        r = self.__match(sim_matrix)  # 递归调用
-        if r:
-            return res + r
-        else:
-            return res
+        arg0 = sim_matrix.argmax(axis=0)                 # 每一列的最大值的位置
+        arg1 = sim_matrix.argmax(axis=1)                 # 每一行的最大值的位置
+        for i in range(len(arg0)):                       # 按列遍历
+            if i in self.y:                              # 已经计算
+                continue                                 # 跳过
+            if sim_matrix[(arg0[i], i)] < self.thresh:   # i列的最大值小于阈值
+                sim_matrix[:, i] = 0                     # 整列设置为0
+                if [None, i] not in self.match_res:      # 如果该匹配对不在结果列表中
+                    self.match_res.append([None, i])     # 追加匹配对到结果列表中
+                    self.y.append(i)                     # 追加到已计算的y值列表
+            else:                                        # i列的最大值大于等于阈值
+                if arg1[arg0[i]] == i:                   # 第i列的最大值刚好也是该值所处行的最大值
+                    self.match_res.append([arg0[i], i])  # 将该匹配对追加到结果列表中
+                    sim_matrix[:, i] = 0                 # 整列设置为0
+                    sim_matrix[arg0[i]] = 0              # 整行设置为0
+                    self.x.append(arg0[i])               # 追加到已计算的x值列表
+                    self.y.append(i)                     # 追加到已计算的y值列表
+        self.__match(sim_matrix)
 
     def __matching(self, sim_matrix):
         """在调用`self.__match`之后，在横向或者纵向上可能遗留下一些非0值，对这些值
@@ -141,14 +144,19 @@ class Computation:
             嵌套的列表
 
         """
-        res = self.__match(sim_matrix)
-        if res is None:
+        self.__match(sim_matrix)
+
+        if not self.match_res:
             return np.nan
-        x = set([i[0] for i in res])
+
         for i in range(sim_matrix.shape[0]):
-            if i not in x:
-                res.append([i, np.nan])
-        return res
+            if i not in self.x:
+                self.match_res.append([i, None])
+
+        for j in range(sim_matrix.shape[1]):
+            if j not in self.y:
+                self.match_res.append([None, j])
+        return self.match_res
 
 
 def sort_sys(label_df) -> dict:
