@@ -69,4 +69,5 @@ if __name__ == '__main__':
             #     p.apply_async(fuse_and_create, args=((label, root_results[i], i, len(root_results)),))
             # p.close()
             # p.join()
+    logger.info("Complete fusion")
     print("融合完成")
