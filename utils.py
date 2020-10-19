@@ -241,7 +241,10 @@ def get_data(graph_, father, sys, sys_type, ent, prop, w, i):
     else:
         rel = gis_rel[i - 1][1:][:-1]
     count = 1
-    cypher = f'match(m){rel}(n:{sys}:{ent}) where id(m)={father} return id(n) as id_, n.'
+    #
+    # 测试数据中见有实体1到实体2有多条关系的情况，暂不明确真实数据是否如此，因此这里对此进行去重限制
+    #
+    cypher = f'match(m){rel}(n:{sys}:{ent}) where id(m)={father} return distinct id(n) as id_, n.'
     for i in range(len(prop[0])):
         cypher += prop[0][i] + f" as `TEXT_{count}_{(w['TEXT'][i])}`, "
         count += 1
