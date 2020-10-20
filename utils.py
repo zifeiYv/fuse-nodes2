@@ -150,15 +150,17 @@ def fuse_other_nodes(start_index, root_result):
         ces = ces.split('&')
         pes = pes.split('&')
         ges = ges.split('&')
+        counts = 0
         for k in range(2):
             ce, pe, ge = ces[k], pes[k], ges[k]
             res = func(ce, pe, ge)
             if res is None:
                 continue
-                # return {}
+            if k == 0:
+                counts = len(res)
             for j in range(len(res)):
-                result_dict[k*len(res) + j] = {'val': res[j],
-                                               'children': {}}
+                result_dict[k*counts + j] = {'val': res[j],
+                                             'children': {}}
 
     return result_dict
 
@@ -180,8 +182,7 @@ def get_property(i):
         cms_['TEXT'], cms_['ENUM']]
     pms_list = [pms_['TEXT'], pms_['ENUM']]
     gis_list = [gis_['TEXT'], gis_['ENUM']]
-    return (
-        cms_list, pms_list, gis_list)
+    return cms_list, pms_list, gis_list
 
 
 def get_root_data(sys, ent, prop, w):
