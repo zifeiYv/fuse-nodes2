@@ -1,19 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-#-------------------------------------------------------------------#
-#                    Project Name : 实体融合                         #
-#                                                                   #
-#                       File Name : app.py                          #
-#                                                                   #
-#                          Author : Jiawei Sun                      #
-#                                                                   #
-#                          Email : j.w.sun1992@gmail.com            #
-#                                                                   #
-#                      Start Date : 2020/07/16                      #
-#                                                                   #
-#                     Last Update : 2020/08/06                      #
-#                                                                   #
-#-------------------------------------------------------------------#
+===============
+main entrance
+===============
 """
 from utils import check
 from flask import Flask, jsonify, request
