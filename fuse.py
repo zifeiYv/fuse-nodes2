@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-====================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 执行融合任务的主要函数和方法
-====================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 import pandas as pd
 import numpy as np
@@ -15,13 +15,15 @@ from time import strftime
 from uuid import uuid1
 import requests
 from log_utils import gen_logger
+from os.path import split, abspath
 
 logger = None
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 fused_label = ''
 BASE_SYS_ORDER = {}
 cfg = ConfigParser()
-with open('./config_files/application.cfg') as f:
+current_path = split(abspath(__file__))[0]
+with open(current_path + '/config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
@@ -34,12 +36,12 @@ err_url = cfg.get('error_handler', 'url')
 def main_fuse(task_id: str) -> None:
     """Main function to run the fusion task.
 
-    The application receives an HTTP request as a start and then go to this
-    function to do the calculation.
+    The application receives an HTTP request as a start and then go to this function to
+    do the calculation.
 
-    This function has no return value and will send data, which is `dict` type
-    in Python, to specific url when needed. The keys of sent data are within
-    "task_id", "state", "msg", "progress", whose explaination are as follows::
+    This function has no return value and will send data, which is `dict` type in
+    Python, to specific url when needed. The keys of sent data are within "task_id",
+    "state", "msg", "progress", whose explanation are as follows::
 
         "task_id": The unique identification of task.
         "state": The state of task, and its possible values are 0(task ended normally),
@@ -60,11 +62,11 @@ def main_fuse(task_id: str) -> None:
     LABEL, PRO, TRANS, fused_label = get_paras(task_id)
 
     BASE_SYS_ORDER = sort_sys(LABEL)
-    logger.info("开始融合")
-    logger.info("删除旧的融合结果...")
+    logger.info("Start to fuse...")
+    logger.info("Deleting old results..")
     delete_old(fused_label)
-    logger.info("删除完成")
-    logger.info("正在融合根节点")
+    logger.info("Deletion complete")
+    logger.info("Fusing root nodes...")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
     mapping, next_batch_no = get_save_mapping(task_id)
     counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
@@ -76,55 +78,57 @@ def main_fuse(task_id: str) -> None:
         err_data = {
             "task_id": task_id,
             "state": "1",
-            "msg": "根节点融合出错",
+            "msg": "Errors occur in root nodes fusion",
             "progress": 0
         }
         requests.post(err_url, json=err_data)
         return
     else:
         if root_res_df.empty:
-            logger.info("根节点融合后无结果，无法继续执行")
+            logger.info("Root nodes fusion result is empty")
             err_data = {
                 "task_id": task_id,
                 "state": "0",
-                "msg": "根节点融合后无结果",
+                "msg": "Root nodes fusion result is empty",
                 "progress": 0
             }
             requests.post(err_url, json=err_data)
             return
         else:
-            logger.info("根节点融合完成，开始融合子图")
+            logger.info("Root nodes fusion complete, start to fuse children nodes...")
             try:
                 base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
                 for i in range(len(root_res_df)):
                     progress_data = {
                         "task_id": task_id,
                         "state": 2,
-                        "msg": "执行中",
-                        "progress": (i + 1)/len(root_res_df)
+                        "msg": "Fusing children nodes...",
+                        "progress": (i + 1) / len(root_res_df)
                     }
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
-                    fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
+                    fuse_other_nodes(1, node,
+                                     BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
                     a, b = caching(counter_only, counter_all, node)
                     counter_only.append(a)
                     counter_all.append(b)
                     create_node_and_rel(node)
                     _ = requests.post(err_url, json=progress_data)
-                save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time)
-                logger.info("创建新图完成")
+                save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
+                                  task_id, start_time)
+                logger.info("Fusion graph creation complete")
                 finish_data = {
-                        "task_id": task_id,
-                        "state": 0,
-                        "msg": "执行完成",
-                        "progress": 1
-                    }
+                    "task_id": task_id,
+                    "state": 0,
+                    "msg": "Complete",
+                    "progress": 1
+                }
                 requests.post(err_url, json=finish_data)
             except Exception as e:
                 logger.info(e)
                 err_data = {
                     "task_id": task_id,
                     "state": "1",
-                    "msg": "执行过程中出错",
+                    "msg": "Errors occur in children nodes fusion",
                     "progress": 0
                 }
                 requests.post(err_url, json=err_data)
@@ -132,59 +136,81 @@ def main_fuse(task_id: str) -> None:
 
 
 def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
-    """对根节点进行融合。
+    """Function to fuse root nodes.
 
-    根节点指的是各个系统中的第一个实体类，为了加快融合速度，应该增加额外的信息以
-    帮助程序缩小检查范围，如行政区域划分等。
+    **Root node** is defined as the very first entity class of each system. In future
+    versions, more information, such as administrative divisions, may be added to the
+    code to speed up fusion.
 
-    融合过程需要递归进行，即逐层获取基准系统与目标系统进行相似度计算，获取融合结果，
-    最后再将融合结果统一整理。
+    The fusion progress will be executed recursively if there are over two systems to
+    be fused, which means program will find a *base system* first and the rest are
+    regarded as *target systems*, then traverse all *target systems* to compute
+    similarities with *base system*. This is called finishing one operation. Next step
+    will repeat above procedures among *target systems*.
 
-    假设有5个系统需要融合：
+    The following is an example:
 
-    +------+-----+-----+-----+-----+-----+
-    |      |sys1 |sys2 |sys3 |sys4 |sys5 |
-    +======+=====+=====+=====+=====+=====+
-    |level1|Ent  |Ent  |Ent  |Ent  |Ent  |
-    +------+-----+-----+-----+-----+-----+
-    |...   |...  |...  |...  |...  |...  |
-    +------+-----+-----+-----+-----+-----+
+    Suppose there are 5 systems that need to be fused:
 
-    根节点的融合只需要考察1级实体的标签即可。
+    +------+-------+-------+-------+-------+-------+
+    |      |sys1   |sys2   |sys3   |sys4   |sys5   |
+    +======+=======+=======+=======+=======+=======+
+    |level1| Ent   | Ent   | Ent   | Ent   | Ent   |
+    +------+-------+-------+-------+-------+-------+
+    |level2| Ent   | Ent   | Ent   | Ent   | Ent   |
+    +------+-------+-------+-------+-------+-------+
+    |...   | ...   | ...   | ...   | ...   | ...   |
+    +------+-------+-------+-------+-------+-------+
 
-    第一步：
-        假设通过判断后， ``sys1`` 为基准系统，其他为目标系统，则需要分别计算 ``sys1`` 与其他系统
-        之间的节点的相似度。由于 ``sys1`` 是基准系统，那么其他系统中判定为与 ``sys1`` 为相同实体
-        的节点之间自动判定为相同实体。
-    第二步：
-        在基准系统与其他系统融合的结果中，只保证全部包含基准系统中的节点，不必全部包含
-        其他系统的节点。如 ``sys1`` 与 ``sys2`` 的结果，若 ``sys1`` 中有3个节点，``sys2`` 中
-        有四个节点，那么其融合结果可以是： ``[[0, 1], [1, None], [2, 2]]``
-    第三步：
-        将两两系统的融合结果进行组合与拼接，其结果格式如下：::
+    .. Note::
+       Only *level1* entities' labels of each systems are needed when fusing root nodes.
+
+    * Step 1:
+        Assume that ``sys1`` is the *base system* and others are *target systems* in
+        the first level of recursion, what we need to do is calculating the
+        similarities between nodes in *base system* and nodes in *target systems*
+        separately. In order to saving time, nodes are determined as the same
+        automatically if they are come from different *target systems* and fused  with
+        one node in *base system* during the computation.
+
+    * Step 2:
+        The fused results that come from *base system* and *target systems* contain all
+        nodes' ids in *base system* while not all nodes' ids from *target systems*. For
+        example, ``sys1`` is *base system* and have 3 nodes, ``sys2`` is *target system*
+        and have 4 nodes. Then fused results could be ``[[0, 1], [1, None], [2, 2]]``.
+
+    * Step 3:
+        Combine the preliminary results of each two systems to get the final results of
+        first recursion, which may have the following format::
 
             [[0, 1, None, None, 1],
              [1, None, 1, 2, 0],
              [2, 2, 2, 0, 2]]
 
-        注意，其中存储的数字为从 `Neo4j` 中读取的节点数据（以列表存储）的序号，需要根据序
-        号查找到对应的节点的 `id` ，形成新的矩阵。
-    第四步：
-        移除 ``sys1`` ，重新寻找基准系统和目标系统，并重复上述三步骤。注意，在获取数据时，不
-        再获取已经在上次迭代中匹配到的节点，对第三步得到的结果应该以 ``None`` 填充上一次迭代
-        中标准系统的所在列，在本例中，为第一列：::
+        Note that integers in results list is node index in node list that read from
+        `Neo4j`, not nodes' id.
+
+    * Step 4:
+        Remove first *base system*, ``sys1`` in this example, and execute programs to
+        find new *base system* and *target systems* then repeat the above three steps.
+        Note that nodes which already get matched in previous computation won't be
+        extracted in next recursion. Besides, ``None`` will be padded to result list at
+        the position(s) of previous *base system(s)*. In the second recursion of this
+        case, it's the first 'column'::
 
             [[None, 0, 0, None, None],
              [None, 3, 3, 1, None],
              [None, 4, 4, None, None]]
 
     Args:
-        label: 记录系统及其包含实体的DataFrame
-        base_order(int): 基准系统的选择顺序，开始时为0
-        not_extract(dict): 存储对应系统中不被抽取的节点的id
+        label: A dataframe that contains system labels and their
+            entity labels
+        base_order(int): Selection order of base systems
+        not_extract(dict): A dict contains the nodes' ids of each system that won't be
+            extracted
 
     Returns:
-        ``pd.DataFrame``
+        `pandas.DataFrame`
 
     """
     # 获取基准系统的信息
@@ -202,7 +228,8 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
             level_num += 1
     base_pros = PRO[base_sys_lab].iloc[level_num]
     # 获取基准系统的数据
-    base_data = get_data(base_sys_lab, base_ent_lab, base_pros, not_extract.get(base_sys_lab))
+    base_data = get_data(base_sys_lab, base_ent_lab, base_pros,
+                         not_extract.get(base_sys_lab))
     if not base_data:  # 说明没有获取到基准系统的数据
         return pd.DataFrame(columns=LABEL.columns)
     if label.shape[1] == 1:  # 说明系统标签库中只剩下一个系统，不再进行融合
@@ -218,7 +245,8 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
         if not isinstance(tar_ent_lab, str):
             continue
         tar_pros = PRO[tar_sys_lab].iloc[level_num]
-        tar_data = get_data(tar_sys_lab, tar_ent_lab, tar_pros, not_extract.get(tar_sys_lab))
+        tar_data = get_data(tar_sys_lab, tar_ent_lab, tar_pros,
+                            not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
             continue
         similarities[tar_sys_lab], _not_extract = compute(base_data, tar_data,
@@ -232,14 +260,15 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
 
 
 def fuse_other_nodes(level: int, node, sorted_sys: dict):
-    """通过递归的方式，根据给出的根节点融合结果，对其下所有可能的节点进行融合。
+    """Fuse all children nodes recursively basing on root nodes result.
 
-    此函数没有返回值，而是将对传入的 ``node`` 对象进行改写，以不断挂接新的子节点。
+    Note that this function has no returns, and it keeps rewriting the ``node``
+    variable during the recursions to add new fused children nodes.
 
     Args:
-        level: 指定当前是第几级实体，用于控制递归的进行，0表示根节点，依次递加
-        node(Nodes): 一个节点对象，存储父节点的有关信息
-        sorted_sys: 配置文件中基准系统的选取序列
+        level: Entity level, used to control recursion
+        node(Nodes): A :py:meth:`~utils.Nodes` object to store fused information
+        sorted_sys: A dict contains sorted systems according to sorting algorithm
 
     Returns:
         None
@@ -265,16 +294,17 @@ def fuse_other_nodes(level: int, node, sorted_sys: dict):
 
 
 def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
-    """从图数据库获取数据（用于融合根节点的数据）。
+    """Get data from `Neo4j` to fuse root nodes.
 
     Args:
-        sys_label: 来源系统的标签
-        ent_labs: 待获取数据的实体的标签，如果以英文分号分割，则表明有多个实体标签处于同一等级
-        pro_names: 待获取实体的属性名称
-        not_extract: 不抽取的节点的id
+        sys_label: System label of data
+        ent_labs: Entity label of data, if it's separated by ';' that means there are
+            multiple entities in the same level
+        pro_names: Property names that needed to be extracted
+        not_extract: Nodes' ids that not to be extracted
 
     Returns:
-        tuple of lists
+        A list of lists, each inner list represents a node in `Neo4j`.
 
     """
     if not_extract is None:
@@ -297,20 +327,21 @@ def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
     return all_data
 
 
-def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extract=None, order=0):
-    """根据父节点的id以及实体级别，找到其对应的所有子节点。
+def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extract=None,
+              order=0):
+    """Get data from `Neo4j` according to parent node's id.
 
     Args:
-        sys_label: 子实体所在系统/空间的标签
-        pros: 融合子实体所依赖的属性列表
-        level: 子实体的级别
-        p_node_id: 父节点的id
-        not_extract: 不抽取的节点的id列表
-        order: 如果存在多类实体位于同一级别上，那么按照`order`指定的顺序逐个进行数据获取，
-            最后再合并
+        sys_label: System label of data
+        pros: Property names that needed to be extracted
+        level: Data level
+        p_node_id: Parent node's id
+        not_extract: Nodes' ids that not to be extracted
+        order: If multiple entities in the same level, then obtain data one by one  in the
+            order specified by `order` and combine together later
 
     Returns:
-        list
+        A list of lists, each inner list represents a node in `Neo4j`.
 
     """
     if not_extract is None:
@@ -319,7 +350,8 @@ def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extrac
     rel = '-[:CONNECT]->'  # 父节点到此节点的关系
     tar_ent_list = LABEL[sys_label].iloc[level].split(';')
     tar_ent = tar_ent_list[order]
-    cypher = f'match (n){rel}(m:`{tar_ent}`) where id(n)={int(p_node_id)} return distinct id(m) ' \
+    cypher = f'match (n){rel}(m:`{tar_ent}`) where id(n)={int(p_node_id)} return ' \
+             f'distinct id(m) ' \
              f'as id_, m.'
     for p in pros:
         cypher += p + f' as {p}, '
@@ -329,15 +361,21 @@ def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extrac
 
 
 def compute(base_data, tar_data, not_extract=None):
-    """输入基准系统的数据和目标系统的数据，计算其中节点的相似度。
+    """Compute the similarities of the given data.
+
+    The similarity results will be stored as a dict, whose key is node's id in
+    `base_data` and corresponding value is **the most similar** node's id in `tar_data`.
 
     Args:
-        base_data(list[dict]): 基准系统的节点列表
-        tar_data(list[dict]): 目标系统的节点列表
-        not_extract(list): 不抽取的节点列表，在此处进行更新
+        base_data(list[dict]): A list of dicts, each dict represents a node of *base
+            system*
+        tar_data(list[dict]): A list of dicts, each dict represents a node of *target
+            system*
+        not_extract(list): Nodes' ids that not to be extracted, and will be updated after
+            computation
 
     Returns:
-        结果字典与更新后的不抽取节点列表
+        A dict of similarity results and updated `not_extract` list.
 
     """
     if not_extract is None:
@@ -357,10 +395,11 @@ def compute(base_data, tar_data, not_extract=None):
 
 
 def combine_sim(similarities: dict, base_sys_lab: str):
-    """将基准系统与目标系统的融合结果进行拼接，形成最后的融合结果。
+    """Transform similarity dict into a `pandas.DataFrame` object.
 
     Args:
-        similarities: 记录基准系统与目标系统之间的相似性结果，其内容格式如下：::
+        similarities: A dict of similarity results of *base system* to *target systems*,
+            whose format is as followed::
 
                 {
                     "target_system_label_1": {
@@ -375,11 +414,12 @@ def combine_sim(similarities: dict, base_sys_lab: str):
                     }
                 }
 
-            外层字典的键，是目标系统的标签；每个内层系统的键都是一样的，为基准系统中待融合的实体的id。
-        base_sys_lab: 基准系统的标签
+            Keys of outer dict are labels of *target systems* and the inner dicts have
+            the same structure, keys of which are nodes' ids of *base system*.
+        base_sys_lab: Label of *base system*
 
     Returns:
-        ``pd.DataFrame``
+        A `pandas.DataFrame` stands for the similarity results.
 
     """
     res = []
@@ -399,14 +439,14 @@ def combine_sim(similarities: dict, base_sys_lab: str):
 
 
 def no_similarity(base_data: list, base_sys_lab: str):
-    """在没有获取到目标系统标签或目标系统数据后，返回本内容。
+    """This function is used when obtain no data from one of *target systems*.
 
     Args:
-        base_data: 基准系统的数据列表
-        base_sys_lab: 基准系统的标签
+        base_data: Data of *base system*
+        base_sys_lab: Label of *base system*
 
     Returns:
-        ``pd.DataFrame``
+        A `pandas.DataFrame` represents similarity results(only *base data* ).
 
     """
     res = []
@@ -422,18 +462,19 @@ def no_similarity(base_data: list, base_sys_lab: str):
 
 
 def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
-                       level: int, not_extract: list = None):
-    """对于同一级别下的多系统实体，进行完全融合。
-
-    运用了递归，依次寻找基准系统与目标系统。
+                       level: int, not_extract: dict = None):
+    """Fuse all entities under one group of parent ids using recursive methods.
 
     Args:
-        label_df: 存储系统与实体标签的data frame
-        not_extract: 不抽取的实体id列表，按系统名称的字典存储
-        parent_ids: 存储根节点的id列表
-        level: 待融合实体的层级
+        label_df: A `pandas.DataFrame` to store system labels and entity labels and has
+            the same structure with `LABEL`
+        not_extract: A dict contains the lists of nodes' ids that not to be extracted
+        parent_ids: Root nodes' ids
+        level: Entity level
 
     Returns:
+        The final return is a `pandas.DataFrame`, but in some certain conditions it will
+        return `None`.
 
     """
     if not_extract is None:
@@ -499,7 +540,8 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
                 tar_data.extend(get_data2(tar_sys, tar_pro, level, tar_p_id,
                                           not_extract.get(tar_sys), i))
         else:
-            tar_data = get_data2(tar_sys, tar_pros, level, tar_p_id, not_extract.get(tar_sys))
+            tar_data = get_data2(tar_sys, tar_pros, level, tar_p_id,
+                                 not_extract.get(tar_sys))
             if not tar_data:
                 continue
             similarities[tar_sys], _not_extract = compute(base_data, tar_data,
@@ -515,12 +557,13 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
 
 
 def create_node_and_rel(node):
-    """对于一个包含子图所有信息的node，将子图生成到Neo4j中去。
+    """Create a subgraph into `Neo4j` according to `node`.
 
     Args:
-        node(Nodes): 一个`trie.Nodes`对象
+        node(Nodes): A :py:meth:`~utils.Nodes` object
 
     Returns:
+        None
 
     """
     graph = Graph(neo4j_url, auth=auth)
@@ -528,14 +571,16 @@ def create_node_and_rel(node):
     root_node = create_node(tx, node.value, node.label, 0)
 
     def func(p_node: Node, nodes: Nodes, i: int):
-        """一个递归调用的函数。
+        """A recursive function to create subgraph.
 
         Args:
-            p_node: 一个`py2neo.Node`对象
-            nodes: 一个`trie.Nodes`对象
-            i: 记录层级
+            p_node: A `py2neo.Node` object, represents parent node which is already
+                created but not committed
+            nodes: A :py:meth:`~utils.Nodes` object
+            i: level of depth
 
         Returns:
+            None
 
         """
         if isinstance(nodes, list):
@@ -559,16 +604,19 @@ def create_node_and_rel(node):
 
 
 def create_node(tx, value: list, label: str, level: int):
-    """根据融合结果的列表与配置文件中的迁移属性内容，创建新的节点对象。
+    """Create the new node according to a fuse result list.
+
+    The new node needs some properties and the corresponding values, which are transferred
+    from original nodes.
 
     Args:
-        tx: 一个图数据库的事务
-        value: 融合后的节点在各个系统中的值的列表，长度等于系统的数量
-        label: 融合后的实体的标签，需要与`merge`合并为多标签
-        level: 第几级实体
+        tx: A `Neo4j` transaction object
+        value: A list of original nodes' ids
+        label: The new label of the new fused nodes
+        level: Entity level
 
     Returns:
-        一个`py2neo.Node`对象
+        A :py:meth:`~py2neo.Node` object
 
     """
     assert len(value) == LABEL.shape[1]
@@ -584,7 +632,8 @@ def create_node(tx, value: list, label: str, level: int):
             if p in tran_pros:  # 已有其他系统的属性被迁移
                 continue
             else:
-                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
+                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0][
+                    'p']
                 if val:
                     tran_pros.add(p)
                     data[f'{p}'] = val
@@ -592,12 +641,13 @@ def create_node(tx, value: list, label: str, level: int):
 
 
 def delete_old(label):
-    """Delete ole fuse results.
+    """Delete old fuse results.
 
     Args:
-        label(str): Node label
+        label(str): Nodes' label
 
     Returns:
+        None
 
     """
     graph = Graph(neo4j_url, auth=auth)
@@ -606,9 +656,18 @@ def delete_old(label):
 
 
 def get_save_mapping(task_id: str):
-    """获取需要存入关系库的相关数据，包括：
-        - 当前计算的次数
-        - 空间与本体的标签与其唯一标识及其他信息的映射字典
+    """Obtain the data that needs to be stored into `MySQL`. Including:
+
+    - Times of computation for the same task
+    - Labels of system and ontology and some other mapping information
+
+    Args:
+        task_id: Id of fuse task
+
+    Returns:
+        A dict contains mapping information and an integer stands for times of
+        computation.
+
     """
     conn = connect(**eval(mysql_cfg))
     with conn.cursor() as cr:
@@ -632,9 +691,22 @@ def get_save_mapping(task_id: str):
 
 
 def caching(counter_only: pd.DataFrame, counter_all: pd.DataFrame, node: Nodes, level=0):
-    """对于每一个子图，计算其中的每个空间下的不同本体中的融合统计情况，包括：
-        - 独有的数量
-        - 共有的数量
+    """Count the number of each ontology in subgraphs, including:
+
+    - Number of ontology that exists in only one system
+    - Number of ontology that exists in more than one system
+
+    Args:
+        counter_only: A `pandas.DataFrame` that stores the number of ontology only exists
+            in ont system
+        counter_all: A `pandas.DataFrame` that stores the number of ontology exists in
+            more than one system
+        node: A :py:meth:`~utils.Nodes` object
+        level: Entity level
+
+    Returns:
+        `counter_only` and `counter_all`.
+
     """
     if pd.Series(node.value).count() == 1:
         for i in range(len(node.value)):
@@ -647,14 +719,15 @@ def caching(counter_only: pd.DataFrame, counter_all: pd.DataFrame, node: Nodes, 
                 counter_all.iloc[level, i] += 1
     if node.children:
         for n in node.children:
-            a, b = caching(counter_only, counter_all, n, level+1)
+            a, b = caching(counter_only, counter_all, n, level + 1)
             counter_only.append(a)
             counter_all.append(b)
     return counter_only, counter_all
 
 
-def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id, start_time):
-    """将融合的统计结果写入关系型数据库"""
+def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id,
+                      start_time):
+    """Save the count results to `MySQL`"""
     conn = connect(**eval(mysql_res))
     end_time = strftime("%Y-%m-%d %H:%M:%S")
     with conn.cursor() as cr:
@@ -663,7 +736,8 @@ def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id
                 id_ = str(uuid1())
                 space_id = mapping[counter_only.columns[j]]
                 label = LABEL.iloc[i, j]
-                ontological_id, ontological_name, ontological_weight, merge_cols = mapping[label]
+                ontological_id, ontological_name, ontological_weight, merge_cols = \
+                mapping[label]
                 matched = counter_all.iloc[i, j]
                 only = counter_only.iloc[i, j]
                 sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', '{space_id}', " \

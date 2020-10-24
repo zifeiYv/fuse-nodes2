@@ -7,10 +7,11 @@ from py2neo import Graph
 from pymysql import connect
 from configparser import ConfigParser
 from log_utils import gen_logger
+from os.path import split, abspath
 
-
+current_path = split(abspath(__file__))[0]
 cfg = ConfigParser()
-with open('./config_files/application.cfg') as f:
+with open(current_path + '/config_files/application.cfg') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
