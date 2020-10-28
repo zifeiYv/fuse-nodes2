@@ -69,6 +69,12 @@ class Computation:
             None/List
 
         """
+        if self.match_res:
+            self.match_res = []
+        if self.x:
+            self.x = []
+        if self.y:
+            self.y = []
         sim = np.zeros(shape=(len(base_data), len(tar_data)), dtype=np.float16)
         for i in range(len(base_data)):
             for j in range(len(tar_data)):
