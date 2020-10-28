@@ -498,6 +498,12 @@ class Computation:
             None或者融合结果列表。
         
         """
+        if self.match_res:
+            self.match_res = []
+        if self.x:
+            self.x = []
+        if self.y:
+            self.y = []
         sim = np.zeros(shape=(len(data1), len(data2)), dtype=np.float16)
         for i in range(len(data1)):
             for j in range(len(data2)):
