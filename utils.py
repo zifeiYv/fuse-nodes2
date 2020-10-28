@@ -166,8 +166,9 @@ def fuse_other_nodes(start_index, root_result):
 
 
 def get_property(i):
-    """Get all properties that are used to calculate similarity from `./config_files/neo4j-structure.cfg`. In order
-    to distinguish TEXT property and ENUM property, using a nested list to store them.
+    """Get all properties that are used to calculate similarity from
+    `./config_files/neo4j-structure.cfg`. In order to distinguish TEXT property and
+    ENUM property, using a nested list to store them.
     
     Args:
         i(int): Number of entity labels
