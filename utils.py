@@ -111,27 +111,36 @@ def fuse_other_nodes(start_index, root_result):
             if root_result.count(None) == 1:  # 父节点只有2个系统有数据，查找对应子节点的数据
                 if root_result[0] is None:
                     cms_data = []
-                    pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, cp, w, i)
-                    gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+                    pms_data = get_data(graph, root_result[1], pms, 'pms',
+                                        pms_ent, cp, w, i)
+                    gis_data = get_data(graph, root_result[2], gis, 'gis',
+                                        gis_ent, gp, w, i)
                 else:
                     if root_result[1] is None:
                         pms_data = []
-                        cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
-                        gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+                        cms_data = get_data(graph, root_result[0], cms, 'cms',
+                                            cms_ent, cp, w, i)
+                        gis_data = get_data(graph, root_result[2], gis, 'gis',
+                                            gis_ent, gp, w, i)
                     else:
                         gis_data = []
-                        cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
-                        pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, pp, w, i)
+                        cms_data = get_data(graph, root_result[0], cms, 'cms',
+                                            cms_ent, cp, w, i)
+                        pms_data = get_data(graph, root_result[1], pms, 'pms',
+                                            pms_ent, pp, w, i)
             else:  # 父节点只有1个系统有数据，查找对应子节点的数据
                 if root_result[0] is not None:
                     pms_data, gis_data = [], []
-                    cms_data = get_data(graph, root_result[0], cms, 'cms', cms_ent, cp, w, i)
+                    cms_data = get_data(graph, root_result[0], cms, 'cms',
+                                        cms_ent, cp, w, i)
                 elif root_result[1] is not None:
                     cms_data, gis_data = [], []
-                    pms_data = get_data(graph, root_result[1], pms, 'pms', pms_ent, pp, w, i)
+                    pms_data = get_data(graph, root_result[1], pms, 'pms',
+                                        pms_ent, pp, w, i)
                 else:
                     cms_data, pms_data = [], []
-                    gis_data = get_data(graph, root_result[2], gis, 'gis', gis_ent, gp, w, i)
+                    gis_data = get_data(graph, root_result[2], gis, 'gis',
+                                        gis_ent, gp, w, i)
 
         _res = validate_data_and_fuse(i, cms_data, pms_data, gis_data)
         return _res
@@ -159,8 +168,8 @@ def fuse_other_nodes(start_index, root_result):
             if k == 0:
                 counts = len(res)
             for j in range(len(res)):
-                result_dict[k*counts + j] = {'val': res[j],
-                                             'children': {}}
+                result_dict[k * counts + j] = {'val': res[j],
+                                               'children': {}}
 
     return result_dict
 
@@ -246,7 +255,8 @@ def get_data(graph_, father, sys, sys_type, ent, prop, w, i):
     #
     # 测试数据中见有实体1到实体2有多条关系的情况，暂不明确真实数据是否如此，因此这里对此进行去重限制
     #
-    cypher = f'match(m){rel}(n:{sys}:{ent}) where id(m)={father} return distinct id(n) as id_, n.'
+    cypher = f'match(m){rel}(n:{sys}:{ent}) where id(m)={father} ' \
+             f'return distinct id(n) as id_, n.'
     for i in range(len(prop[0])):
         cypher += prop[0][i] + f" as `TEXT_{count}_{(w['TEXT'][i])}`, "
         count += 1
@@ -306,7 +316,8 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
     computer = Computation(THRESHOLD)
     if none_counts == 1:
         if not cms_data:
-            logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (pms, gis)''')
+            logger.warning(f'''{('  ' * i)}Calculate the similarity 
+of two systems (pms, gis)''')
             res = computer.compute(pms_data, gis_data)
             logger.info(f'''{('  ' * i)}Complete''')
             if res is None:
@@ -323,7 +334,8 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
             logger.info(f'''{('  ' * i)}Complete''')
             return res
         if not pms_data:
-            logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (cms, gis)''')
+            logger.warning(f"{('  ' * i)}Calculate the similarity "
+                           f"of two systems (cms, gis)")
             res = computer.compute(cms_data, gis_data)
             logger.info(f'''{('  ' * i)}Complete''')
             if res is None:
@@ -339,7 +351,7 @@ def compute_sim_and_combine(i, none_counts, cms_data=None, pms_data=None, gis_da
 
             logger.info(f'''{('  ' * i)}Complete''')
             return res
-        logger.warning(f'''{('  ' * i)}Calculate the similarity of two systems (cms, pms)''')
+        logger.warning(f"{('  ' * i)}Calculate the similarity of two systems (cms, pms)")
         res = computer.compute(cms_data, pms_data)
         logger.info(f'''{('  ' * i)}Complete''')
         if res is None:
@@ -415,7 +427,8 @@ def save_to_mysql(sub_graph):
 
     g = Graph(neo4j_url, auth=auth)
 
-    sql = f'''insert into fuse_results(period, cms_id, pms_id, gis_id, city_code, county_code, 
+    sql = f'''insert into fuse_results(period, cms_id, pms_id, 
+          gis_id, city_code, county_code, 
           gds_code, sys_type, equip_type) values 
           ('{now}', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')'''
 
@@ -575,21 +588,21 @@ class Computation:
         if np.sum(sim_matrix, dtype=np.float64) == 0:
             return
 
-        arg0 = sim_matrix.argmax(axis=0)                 # 每一列的最大值的位置
-        arg1 = sim_matrix.argmax(axis=1)                 # 每一行的最大值的位置
-        for i in range(len(arg0)):                       # 按列遍历
-            if i in self.y:                              # 已经计算
-                continue                                 # 跳过
-            if sim_matrix[(arg0[i], i)] < self.thresh:   # i列的最大值小于阈值
-                sim_matrix[:, i] = 0                     # 整列设置为0
-                if [None, i] not in self.match_res:      # 如果该匹配对不在结果列表中
-                    self.match_res.append([None, i])     # 追加匹配对到结果列表中
-                    self.y.append(i)                     # 追加到已计算的y值列表
-            else:                                        # i列的最大值大于等于阈值
-                if arg1[arg0[i]] == i:                   # 第i列的最大值刚好也是该值所处行的最大值
+        arg0 = sim_matrix.argmax(axis=0)  # 每一列的最大值的位置
+        arg1 = sim_matrix.argmax(axis=1)  # 每一行的最大值的位置
+        for i in range(len(arg0)):  # 按列遍历
+            if i in self.y:  # 已经计算
+                continue  # 跳过
+            if sim_matrix[(arg0[i], i)] < self.thresh:  # i列的最大值小于阈值
+                sim_matrix[:, i] = 0  # 整列设置为0
+                if [None, i] not in self.match_res:  # 如果该匹配对不在结果列表中
+                    self.match_res.append([None, i])  # 追加匹配对到结果列表中
+                    self.y.append(i)  # 追加到已计算的y值列表
+            else:  # i列的最大值大于等于阈值
+                if arg1[arg0[i]] == i:  # 第i列的最大值刚好也是该值所处行的最大值
                     self.match_res.append([arg0[i], i])  # 将该匹配对追加到结果列表中
-                    sim_matrix[:, i] = 0                 # 整列设置为0
-                    sim_matrix[arg0[i]] = 0              # 整行设置为0
-                    self.x.append(arg0[i])               # 追加到已计算的x值列表
-                    self.y.append(i)                     # 追加到已计算的y值列表
+                    sim_matrix[:, i] = 0  # 整列设置为0
+                    sim_matrix[arg0[i]] = 0  # 整行设置为0
+                    self.x.append(arg0[i])  # 追加到已计算的x值列表
+                    self.y.append(i)  # 追加到已计算的y值列表
         self.__match(sim_matrix)

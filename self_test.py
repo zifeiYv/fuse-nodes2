@@ -35,7 +35,8 @@ def func(list1, list2, list3=None):
             raise LengthNotMatchError("Length of %s and %s not match" % (list1, list2))
     else:
         if not len(list1) == len(list2) == len(list3):
-            raise LengthNotMatchError("Length of %s, %s and %s not match" % (list1, list2, list3))
+            raise LengthNotMatchError(
+                "Length of %s, %s and %s not match" % (list1, list2, list3))
 
 
 def check():
@@ -48,8 +49,9 @@ def check():
     except FileNotFoundError:
         raise
 
-    cms, pms, gis = cfg.get('system_label', 'cms'), cfg.get('system_label', 'pms'), cfg.get(
-        'system_label', 'gis')
+    cms, pms, gis = cfg.get('system_label', 'cms'), \
+                    cfg.get('system_label', 'pms'), \
+                    cfg.get('system_label', 'gis')
     # Are there two systems at least?
     if list(map(len, (cms, pms, gis))).count(0) > 1:
         raise NotEnoughLabels("Two system labels are needed at least")
@@ -71,15 +73,18 @@ def check():
     if cms:
         func(cms_entities, cms_rel)
         if len(cms_entities) != len(cms_pros):
-            raise LengthNotMatchError("In cms, number of entity and property doesn't match")
+            raise LengthNotMatchError(
+                "In cms, number of entity and property doesn't match")
     if pms:
         func(pms_entities, pms_rel)
         if len(pms_entities) != len(pms_pros):
-            raise LengthNotMatchError("In pms, number of entity and property doesn't match")
+            raise LengthNotMatchError(
+                "In pms, number of entity and property doesn't match")
     if gis:
         func(gis_entities, gis_rel)
         if len(gis_entities) != len(gis_pros):
-            raise LengthNotMatchError("In gis, number of entity and property doesn't match")
+            raise LengthNotMatchError(
+                "In gis, number of entity and property doesn't match")
 
     func(fuse_entities, fuse_rel)
 
@@ -110,12 +115,12 @@ def check():
     # Are properties' detail of each entity from each system the same?
     if list(map(len, (cms, pms, gis))).count(0) == 0:
         for i in range(len(cms_entities)):
-            if not len(eval(cms_pros[i])['TEXT']) == len(eval(pms_pros[i])['TEXT']) == len(
-                    eval(gis_pros[i])['TEXT']):
+            if not len(eval(cms_pros[i])['TEXT']) == len(eval(pms_pros[i])['TEXT']) == \
+                    len(eval(gis_pros[i])['TEXT']):
                 raise PropertiesNotMatch(
                     f"'TEXT' properties doesn't match among three systems(property no. {i})")
-            if not len(eval(cms_pros[i])['ENUM']) == len(eval(pms_pros[i])['ENUM']) == len(
-                    eval(gis_pros[i])['ENUM']):
+            if not len(eval(cms_pros[i])['ENUM']) == len(eval(pms_pros[i])['ENUM']) == \
+                    len(eval(gis_pros[i])['ENUM']):
                 raise PropertiesNotMatch(
                     f"'ENUM' properties doesn't match among three systems(property no. {i})")
     else:
