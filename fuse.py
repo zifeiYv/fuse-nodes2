@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-执行融合任务的主要函数和方法
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Main functions to run fusing tasks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 import pandas as pd
 import numpy as np
@@ -679,7 +679,8 @@ def get_save_mapping(task_id: str):
         next_batch_no = cache + 1 if cache else 1
 
         cr.execute(f"select space_id, space_label, ontological_id, ontological_name, "
-                   f"ontological_label, ontological_weight, ontological_mapping_column_name "
+                   f"ontological_label, ontological_weight, "
+                   f"ontological_mapping_column_name "
                    f"from gd_fuse_attribute t where t.fuse_id = '{task_id}'")
         info = cr.fetchall()
         # info: 空间标签的唯一标识，空间标签，本体标签的唯一标识，本体名称，
@@ -739,12 +740,12 @@ def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id
                 space_id = mapping[counter_only.columns[j]]
                 label = LABEL.iloc[i, j]
                 ontological_id, ontological_name, ontological_weight, merge_cols = \
-                mapping[label]
+                    mapping[label]
                 matched = counter_all.iloc[i, j]
                 only = counter_only.iloc[i, j]
-                sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', '{space_id}', " \
-                      f"'{ontological_id}', '{ontological_name}', '{label}', " \
-                      f"{ontological_weight}, '{merge_cols}',{matched}, {only}, {next_batch_no}, " \
-                      f"'{start_time}', '{end_time}')"
+                sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
+                      f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
+                      f"'{label}',{ontological_weight}, '{merge_cols}',{matched}, " \
+                      f"{only}, {next_batch_no}, '{start_time}', '{end_time}')"
                 cr.execute(sql)
     conn.commit()

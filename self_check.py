@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-.. centered:: 开始融合任务前进行必要的检验
+Perform the necessary inspections before starting the fusion task
 """
 import pandas as pd
 from py2neo import Graph
@@ -20,11 +20,21 @@ mysql_res = cfg.get('mysql', 'mysql_res')
 
 
 class CheckError(Exception):
+    """This exception will be raised whenever any necessary constraints are not
+     satisfied"""
     pass
 
 
 def check(task_id):
-    """用于检查参数有效性的函数"""
+    """Check if parameters are valid.
+
+    Args:
+        task_id(str): Unique ID of fusing task
+
+    Returns:
+        New label of fused graph to generate.
+
+    """
     logger = gen_logger(task_id)
     # 数据库连接是否正常
     for i in (mysql_res, mysql_cfg):
@@ -77,24 +87,14 @@ def check(task_id):
 
 
 def get_paras(task_id):
-    """从关系型数据库获取参数，并处理成DataFrame的形式返回给``check()``进行调用。
+    """Get necessary parameters from MySQL and transform their to `pandas.DataFrame`
+    objects for :py:func:`~self_check.check` to use.
 
-    返回的DataFrame一共有三个：`label`指定了需要融合的空间及其本体的标签，并按照
-    顺序排列；`pro`指定了融合需要的属性；`trans`指定了融合后生成的新图需要保留旧
-    图中的哪些属性。
+    Args:
+        task_id(str): Unique ID of fusing task
 
-    `label`的形式如下：
-              | sys1 | sys2 | sys3 | sys4 | sys5 |
-        ------|------|------|------|------|------|
-        level1| Ent  | Ent  | Ent  | Ent  | Ent  |
-        ------|------|------|------|------|------|
-        level2| Ent  | Ent  | Ent  | Ent  | Ent  |
-        ------|------|------|------|------|------|
-    列名为空间的标签，行为层级顺序，其中的元素为对应的本体的标签。
-
-    `pro`的结构与`label`相同，内容换成了对应本体的属性。
-
-    `trans`与`pro`类似。
+    Returns:
+        `pandas.DataFrame` objects and new label for fused graph.
 
     """
     try:
@@ -105,8 +105,8 @@ def get_paras(task_id):
         cr.execute(f"select label from gd_fuse where id='{task_id}'")
         merged_label = cr.fetchone()[0]
         cr.execute(f"select space_label, ontological_label, ontological_weight, "
-                   f"ontological_mapping_column_name from gd_fuse_attribute t where t.fuse_id='"
-                   f"{task_id}'")
+                   f"ontological_mapping_column_name from gd_fuse_attribute t "
+                   f"where t.fuse_id='{task_id}'")
         # 空间标签、本体标签、本体权重、融合依据属性
         info = cr.fetchall()
 
@@ -126,14 +126,15 @@ def get_paras(task_id):
                 if isinstance(label.loc[num_rows-weights.index(t[2])-1, c], float):  # 说明该位置上尚未有值
                     label.loc[num_rows-weights.index(t[2])-1, c] = t[1]
                 else:  # 否则，将新的值追加到原来的值后面，用英文分号分割
-                    label.loc[num_rows-weights.index(t[2])-1, c] = label.loc[num_rows-weights.index(t[2])-1, c] + ';'\
-                                                                    + t[1]
+                    label.loc[num_rows-weights.index(t[2])-1, c] = \
+                        label.loc[num_rows-weights.index(t[2])-1, c] + ';' + t[1]
                     # label.loc[num_rows-weights.index(t[2])-1, c] = t[1]
 
                 if isinstance(pro.loc[num_rows-weights.index(t[2])-1, c], float):
                     pro.loc[num_rows-weights.index(t[2])-1, c] = t[3]
                 else:
-                    pro.loc[num_rows-weights.index(t[2])-1, c] = pro.loc[num_rows-weights.index(t[2])-1, c] + ';' + t[3]
+                    pro.loc[num_rows-weights.index(t[2])-1, c] = \
+                        pro.loc[num_rows-weights.index(t[2])-1, c] + ';' + t[3]
                     # pro.loc[num_rows-weights.index(t[2])-1, c] = t[3]
     # 根节点暂不支持多个本体
     for i in range(label.shape[1]):

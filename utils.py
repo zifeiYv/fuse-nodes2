@@ -1,32 +1,25 @@
 # -*- coding: utf-8 -*-
-"""
-File Name  : utils
-Author     : Jiawei Sun
-Email      : j.w.sun1992@gmail.com
-Start Date : 2020/07/15
-Describe   :
-    一些辅助类和函数
-"""
 from collections import OrderedDict
 import numpy as np
 from text_sim_utils import sims
 
 
 class Nodes:
-    """定义一个类来存储一个单独的子图。
+    """A class to store subgraphs.
 
-    对于任意一行融合根节点的数据得到的结果，都是一个根节点，从该根节点出发，结合配置文件中
-    的融合结构一直融合到最后一级实体，即得到来一颗树，称为子图。
+    Each row of the output of :py:func:`~fuse.fuse_root_nodes` contains all original ids
+    for a new node that needed to be generated, which is called the start node.
 
-    存储该子图，以便于后续在Neo4j中生成新的融合图。
+    Along with this start node, we can find all of their children and fuse them
+    together. The fuse results are stored as a instance of this class.
     """
     def __init__(self, label: str, value: list, rel: str = None):
-        """实例化时，需要传入两个参数。
+        """
 
         Args:
-            label: 该层级的设备类型的标签
-            value: 按照配置文件中的系统的顺序，依次记录该实体对应于各个系统中的节点的id
-            rel: 记录上级实体到本实体的关系标签，如果是根节点，那么为None
+            label: Entities' label
+            value: A list of original ids, whose order is defined in configuration file
+            rel: Relation name of parent node to this node, `None` for root node
         """
         self.children = []
         self.label = label
@@ -34,21 +27,14 @@ class Nodes:
         self.rel = rel
 
     def add_child(self, node):
-        """此方法的作用是，为融合后的实体添加子实体。
-
-        各个参数的含义与实例化时的含义相同。
-
-        Args:
-            node(Nodes):
-
-        Returns:
-
+        """Add child node to an instance.
         """
         self.children.append(node)
 
 
 class Computation:
-    """传入两个由字典组成的列表，每个字典代表一个实体对象， ``compute`` 方法计算两个列表中对象的相似度，
+    """
+    传入两个由字典组成的列表，每个字典代表一个实体对象， ``compute`` 方法计算两个列表中对象的相似度，
     最后返回一个嵌套的列表，最内层列表中的数值为每个字典在传入列表中的索引。"""
 
     def __init__(self, thresh=0.75):
