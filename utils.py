@@ -121,13 +121,14 @@ class Computation:
         arg0 = sim_matrix.argmax(axis=0)                 # 每一列的最大值的位置
         arg1 = sim_matrix.argmax(axis=1)                 # 每一行的最大值的位置
         for i in range(len(arg0)):                       # 按列遍历
-            if i in self.y:                              # 已经计算
+            if i in self.y or arg0[i] in self.x:         # 已经计算
                 continue                                 # 跳过
             if sim_matrix[(arg0[i], i)] < self.thresh:   # i列的最大值小于阈值
                 sim_matrix[:, i] = 0                     # 整列设置为0
-                if [None, i] not in self.match_res:      # 如果该匹配对不在结果列表中
-                    self.match_res.append([None, i])     # 追加匹配对到结果列表中
-                    self.y.append(i)                     # 追加到已计算的y值列表
+                # if [None, i] not in self.match_res:      # 如果该匹配对不在结果列表中
+                #     self.match_res.append([None, i])     # 追加匹配对到结果列表中
+                #     self.y.append(i)                     # 追加到已计算的y值列表
+                continue
             else:                                        # i列的最大值大于等于阈值
                 if arg1[arg0[i]] == i:                   # 第i列的最大值刚好也是该值所处行的最大值
                     self.match_res.append([arg0[i], i])  # 将该匹配对追加到结果列表中

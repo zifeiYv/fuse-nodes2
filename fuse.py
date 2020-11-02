@@ -23,7 +23,7 @@ fused_label = ''
 BASE_SYS_ORDER = {}
 cfg = ConfigParser()
 current_path = split(abspath(__file__))[0]
-with open(current_path + '/config_files/application.cfg') as f:
+with open(current_path + '/config_files/application.cfg', encoding='utf-8') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
@@ -386,6 +386,8 @@ def compute(base_data, tar_data, not_extract=None):
     if res is np.nan:
         return returned
     for i in res:
+        if i[0] is None:
+            continue
         if i[1] is not None and i[1] is not np.nan:
             returned[base_data[i[0]]['id_']] = tar_data[i[1]]['id_']
             not_extract.append(tar_data[i[1]]['id_'])
