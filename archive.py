@@ -22,6 +22,3 @@ else:
         os.popen(f'mv {i} ./archive_code')
     os.popen(f'cp -r config_files code')
     os.popen(f'cp readme.md requirements.txt ./archive_code')
-
-
-
