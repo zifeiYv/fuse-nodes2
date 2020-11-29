@@ -17,8 +17,6 @@ from concurrent.futures import ThreadPoolExecutor
 # from progressbar import ProgressBar
 from fuse import main_fuse
 from log_utils import gen_logger
-import traceback
-import sys
 import os
 
 if not os.path.exists('./logs'):

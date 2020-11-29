@@ -3,6 +3,9 @@ import os
 import argparse
 import compileall
 import shutil
+import sys
+
+PY = sys.version[:3]
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', type=bool, default=False, help="是否源码发布")
@@ -16,9 +19,12 @@ else:
     if os.path.exists('./archive_code'):
         shutil.rmtree('./archive_code')
     os.mkdir('archive_code')
+    with open('./archive_code/PY', 'w') as f:
+        f.write(PY)
+
     compileall.compile_dir('.', quiet=1, maxlevels=0, force=True, legacy=True)
     all_files = [f for f in os.listdir() if os.path.isfile(f) and f.endswith('pyc')]
     for i in all_files:
         os.popen(f'mv {i} ./archive_code')
-    os.popen(f'cp -r config_files code')
+    os.popen(f'cp -r config_files archive_code')
     os.popen(f'cp readme.md requirements.txt ./archive_code')
