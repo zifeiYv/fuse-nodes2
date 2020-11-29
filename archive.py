@@ -14,6 +14,9 @@ args = parser.parse_args()
 source_code = args.s
 
 if source_code:
+    if os.path.exists('./logs'):
+        shutil.rmtree('./logs')
+    os.mkdir('logs')
     os.popen("git archive -o code_`git rev-parse HEAD | cut -c 1-5`.zip HEAD")
 else:
     if os.path.exists('./archive_code'):
@@ -23,8 +26,10 @@ else:
         f.write(PY)
 
     compileall.compile_dir('.', quiet=1, maxlevels=0, force=True, legacy=True)
-    all_files = [f for f in os.listdir() if os.path.isfile(f) and f.endswith('pyc')]
+    all_files = [f for f in os.listdir() if os.path.isfile(f) and f.endswith('pyc')
+                 and f != 'gunicorn_config.pyc']
     for i in all_files:
         os.popen(f'mv {i} ./archive_code')
     os.popen(f'cp -r config_files archive_code')
-    os.popen(f'cp readme.md requirements.txt ./archive_code')
+    os.popen(f'cp readme.md requirements.txt gunicorn_config.py ./archive_code')
+    os.makedirs('./archive_code/logs')
