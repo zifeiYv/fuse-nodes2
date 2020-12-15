@@ -69,8 +69,8 @@ def main_fuse(task_id: str) -> None:
     logger.info("Fusing root nodes...")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
     mapping, next_batch_no = get_save_mapping(task_id)
-    counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
-    counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
+    # counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
+    # counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     try:
         root_res_df = fuse_root_nodes()
     except Exception as e:
@@ -108,13 +108,14 @@ def main_fuse(task_id: str) -> None:
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
                     fuse_other_nodes(1, node,
                                      BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
-                    a, b = caching(counter_only, counter_all, node)
-                    counter_only.append(a)
-                    counter_all.append(b)
-                    create_node_and_rel(node)
+                    # a, b = caching(counter_only, counter_all, node)
+                    # counter_only.append(a)
+                    # counter_all.append(b)
+                    stat_info = create_node_and_rel(node)
                     _ = requests.post(err_url, json=progress_data)
-                save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
-                                  task_id, start_time)
+                # save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
+                #                   task_id, start_time)
+                    save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time)
                 logger.info("Fusion graph creation complete")
                 finish_data = {
                     "task_id": task_id,
@@ -572,6 +573,39 @@ def create_node_and_rel(node):
     tx = graph.begin()
     root_node = create_node(tx, node.value, node.label, 0)
 
+    stat_info = {}  # 统计信息
+
+    def statistic(a_neo_node, i):
+        dict_info = dict(a_neo_node.items())
+        label = str(a_neo_node.labels).split(':')
+        label.remove('')
+        label.remove(fused_label)  # 本体的标签
+        space = BASE_SYS_ORDER[i]  # 空间的标签
+        num = 0
+        for k in BASE_SYS_ORDER:
+            if dict_info.get(f'{BASE_SYS_ORDER[k]}Id'):
+                num += 1
+        if space + '/' + label not in stat_info:
+            if num > 1:
+                if dict_info.get('orgno'):
+                    stat_info[space+'/'+label] = {dict_info['orgno']: {'all': 1, 'only': 0}}
+                stat_info[space+'/'+label] = {'all': 1, 'only': 0}
+            else:
+                if dict_info.get('orgno'):
+                    stat_info[space+'/'+label] = {dict_info['orgno']: {'all': 0, 'only': 1}}
+                stat_info[space+'/'+label] = {'all': 0, 'only': 1}
+        else:
+            if num > 1:
+                if dict_info.get('orgno'):
+                    stat_info[space+'/'+label][dict_info['orgno']]['all'] += 1
+                stat_info[space+'/'+label]['all'] += 1
+            else:
+                if dict_info.get('orgno'):
+                    stat_info[space+'/'+label][dict_info['orgno']]['only'] += 1
+                stat_info[space+'/'+label]['only'] += 1
+
+    statistic(root_node, 0)
+
     def func(p_node: Node, nodes: Nodes, i: int):
         """A recursive function to create subgraph.
 
@@ -589,6 +623,7 @@ def create_node_and_rel(node):
             return
         data = nodes.children
         if not data:
+            statistic(p_node, i)
             tx.create(p_node)
             return
         for j in data:  # j也是一个`trie.Nodes`对象
@@ -603,6 +638,7 @@ def create_node_and_rel(node):
 
     func(root_node, node, 1)
     tx.commit()
+    return stat_info
 
 
 def create_node(tx, value: list, label: str, level: int):
@@ -629,13 +665,15 @@ def create_node(tx, value: list, label: str, level: int):
             continue
         v = int(v)
         data[f'{BASE_SYS_ORDER[i]}Id'] = v
+        org_no = tx.run(f"match(n) where id(n)={v} return n.orgno as orgno").data()[0]['orgno']
+        data[f'{BASE_SYS_ORDER[i]}OrgNo'] = org_no
+
         pros = TRANS[BASE_SYS_ORDER[i]].iloc[level].split(';')  # 某个系统、某个级别实体的迁移属性列表
         for p in pros:
             if p in tran_pros:  # 已有其他系统的属性被迁移
                 continue
             else:
-                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0][
-                    'p']
+                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
                 if val:
                     tran_pros.add(p)
                     data[f'{p}'] = val
@@ -748,4 +786,31 @@ def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id
                       f"'{label}',{ontological_weight}, '{merge_cols}',{matched}, " \
                       f"{only}, {next_batch_no}, '{start_time}', '{end_time}')"
                 cr.execute(sql)
+    conn.commit()
+
+
+def save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time):
+    conn = connect(**eval(mysql_res))
+    end_time = strftime("%Y-%m-%d %H:%M:%S")
+    with conn.cursor() as cr:
+        for i in stat_info:
+            space, ontology = i.split('/')
+            id_ = str(uuid1())
+            space_id = mapping[space]
+            ontological_id, ontological_name, ontological_weight, merge_cols = \
+                mapping[ontology]
+            total_matched, total_only = stat_info[i]['all'], stat_info[i]['only']
+            cr.execute(f"insert into gd_fuse_result values ('{id_}', '{task_id}', "
+                       f"'{space_id}', '{ontological_id}', '{ontological_name}', "
+                       f"'{ontology}',{ontological_weight}, '{merge_cols}',{total_matched}, "
+                       f"{total_only}, {next_batch_no}, '{start_time}', '{end_time}', '{None}')")
+            id_ = str(uuid1())
+            for j in stat_info[i]:
+                if j not in ['all', 'only']:
+                    matched, only = stat_info[i][j]['all'], stat_info[i][j]['only']
+                    sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
+                          f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
+                          f"'{ontology}',{ontological_weight}, '{merge_cols}',{matched}, " \
+                          f"{only}, {next_batch_no}, '{start_time}', '{end_time}', '{j}')"
+                    cr.execute(sql)
     conn.commit()
