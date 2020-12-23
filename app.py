@@ -13,16 +13,17 @@
 from self_check import check
 from flask import Flask, jsonify, request, json
 from werkzeug.exceptions import HTTPException
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 # from progressbar import ProgressBar
 from fuse import main_fuse
 from log_utils import gen_logger
 import os
+import traceback
 
 if not os.path.exists('./logs'):
     os.makedirs('./logs')
 url = '/entity_fuse/'
-executor = ThreadPoolExecutor(1)
+executor = ProcessPoolExecutor(1)
 
 app = Flask(__name__)
 
@@ -36,12 +37,13 @@ def func():
         _ = check(task_id)
     except Exception as e:
         logger.error(e)
+        logger.error(traceback.print_exc())
         return jsonify({'state': 1, 'msg': "配置文件非法，查看日志输出"})
     logger.info("一切正常")
 
-    main_fuse(task_id)
-    # executor.submit(main_fuse, task_id)
-    return jsonify({"state": 0, "msg": "正在后台进行融合任务"})
+    # main_fuse(task_id)
+    executor.submit(main_fuse, task_id)
+    return jsonify({"state": 2, "msg": "正在后台进行融合任务"})
 
 
 @app.errorhandler(HTTPException)
@@ -66,4 +68,4 @@ def handle_progress():
 
 if __name__ == '__main__':
     # 生成环境下启动使用`gunicorn -c gunicorn_config.py app:app`
-    app.run('0.0.0.0')
+    app.run('0.0.0.0', debug=True)

@@ -16,6 +16,7 @@ from uuid import uuid1
 import requests
 from log_utils import gen_logger
 from os.path import split, abspath
+import traceback
 
 logger = None
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -60,7 +61,8 @@ def main_fuse(task_id: str) -> None:
     logger = gen_logger(task_id)
     global LABEL, PRO, TRANS, BASE_SYS_ORDER, fused_label
     LABEL, PRO, TRANS, fused_label = get_paras(task_id)
-
+    print(LABEL)
+    print(PRO)
     BASE_SYS_ORDER = sort_sys(LABEL)
     logger.info("Start to fuse...")
     logger.info("Deleting old results..")
@@ -71,10 +73,12 @@ def main_fuse(task_id: str) -> None:
     mapping, next_batch_no = get_save_mapping(task_id)
     # counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
     # counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
+    stat_info = {}
     try:
         root_res_df = fuse_root_nodes()
     except Exception as e:
         logger.info(e)
+        logger.info(traceback.print_exc())
         err_data = {
             "task_id": task_id,
             "state": "1",
@@ -99,6 +103,7 @@ def main_fuse(task_id: str) -> None:
             try:
                 base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
                 for i in range(len(root_res_df)):
+                    logger.info(f'进度：{i}/{len(root_res_df)}')
                     progress_data = {
                         "task_id": task_id,
                         "state": 2,
@@ -106,16 +111,16 @@ def main_fuse(task_id: str) -> None:
                         "progress": (i + 1) / len(root_res_df)
                     }
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
-                    fuse_other_nodes(1, node,
-                                     BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
+                    fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
                     # a, b = caching(counter_only, counter_all, node)
                     # counter_only.append(a)
                     # counter_all.append(b)
-                    stat_info = create_node_and_rel(node)
+                    stat_info = create_node_and_rel(stat_info, node)
                     _ = requests.post(err_url, json=progress_data)
                 # save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
                 #                   task_id, start_time)
-                    save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time)
+                save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time)
+                print(stat_info)
                 logger.info("Fusion graph creation complete")
                 finish_data = {
                     "task_id": task_id,
@@ -125,6 +130,7 @@ def main_fuse(task_id: str) -> None:
                 }
                 requests.post(err_url, json=finish_data)
             except Exception as e:
+                logger.error(traceback.print_exc())
                 logger.info(e)
                 err_data = {
                     "task_id": task_id,
@@ -250,8 +256,9 @@ def fuse_root_nodes(label: pd.DataFrame = None, base_order=0, not_extract=None):
                             not_extract.get(tar_sys_lab))
         if not tar_data:  # 说明没有获取到该目标系统的数据
             continue
-        similarities[tar_sys_lab], _not_extract = compute(base_data, tar_data,
-                                                          not_extract.get(tar_sys_lab))
+        # print(base_data)
+        # print(tar_data)
+        similarities[tar_sys_lab], _not_extract = compute(base_data, tar_data, not_extract.get(tar_sys_lab))
         not_extract[tar_sys_lab] = _not_extract  # 更新不抽取的数据
     if not similarities:  # 说明遍历完所有的目标系统后均没有获取到数据，故没有融合结果
         return no_similarity(base_data, base_sys_lab)
@@ -317,11 +324,11 @@ def get_data(sys_label: str, ent_labs: str, pro_names: str, not_extract=None):
     all_data = []
     for i in range(len(ent_labs)):
         ent_lab = ent_labs[i]
-        pros = pro_names[i].split(',')
+        # pros = pro_names[i].split(',')
         cypher = f'match (n:{sys_label}:{ent_lab}) '
         cypher += 'return id(n) as id_, '
-        for p in pros:
-            cypher += 'n.' + p + f' as {p}, '
+        for p in range(len(pro_names)):
+            cypher += 'n.' + pro_names[p] + f' as pro_{p}, '
         cypher = cypher[:-2]
         data = graph.run(cypher).data()
         all_data.extend([i for i in data if i['id_'] not in not_extract])
@@ -352,10 +359,10 @@ def get_data2(sys_label: str, pros: list, level: int, p_node_id: int, not_extrac
     tar_ent_list = LABEL[sys_label].iloc[level].split(';')
     tar_ent = tar_ent_list[order]
     cypher = f'match (n){rel}(m:`{tar_ent}`) where id(n)={int(p_node_id)} return ' \
-             f'distinct id(m) ' \
-             f'as id_, m.'
-    for p in pros:
-        cypher += p + f' as {p}, '
+        f'distinct id(m) ' \
+        f'as id_,'
+    for p in range(len(pros)):
+        cypher += 'm.' + pros[p] + f' as pro_{p}, '
     cypher = cypher[:-2]
     data = graph.run(cypher).data()
     return [i for i in data if i['id_'] not in not_extract]
@@ -385,7 +392,7 @@ def compute(base_data, tar_data, not_extract=None):
     res = computer.compute(base_data, tar_data)
     returned = {}
     if res is np.nan:
-        return returned
+        return returned, not_extract
     for i in res:
         if i[0] is None:
             continue
@@ -513,18 +520,15 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
     base_p_id = parent_ids[systems.index(base_sys)]
     if np.isnan(base_p_id):
         return None
-    if len(base_pros) > 1:  # 说明出现多类实体处在同一级别上
-        # 在当前的设置中，这个条件分支永远也不会被执行到
-        base_data = []
-        for i in range(len(base_pros)):
-            base_pro = base_pros[i].split(',')
-            base_data.extend(get_data2(base_sys, base_pro, level, base_p_id,
-                                       not_extract.get(base_sys), i))
-    else:
-        base_data = get_data2(base_sys, base_pros, level, base_p_id,
-                              not_extract.get(base_sys))
-        if not base_data:
-            return None
+    # if len(base_pros) > 1:  # 说明出现多类实体处在同一级别上
+    #     # 在当前的设置中，这个条件分支永远也不会被执行到
+    #     base_data = []
+    #     for i in range(len(base_pros)):
+    #         base_pro = base_pros[i].split(',')
+    base_data = get_data2(base_sys, base_pros, level, base_p_id,
+                          not_extract.get(base_sys))
+    if not base_data:
+        return None
 
     # 遍历目标系统，获取相关数据，然后逐个与基准系统进行比对
     # 并将比对的结果存储下来
@@ -536,21 +540,21 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
             continue
         if not isinstance(labels[systems.index(tar_sys)], str):
             continue
-        if len(tar_pros) > 1:  # 说明出现类多类实体处在同一级别上
-            tar_data = []
-            for i in range(len(tar_pros)):
-                tar_pro = tar_pros[i].split(',')
-                tar_data.extend(get_data2(tar_sys, tar_pro, level, tar_p_id,
-                                          not_extract.get(tar_sys), i))
-        else:
-            tar_data = get_data2(tar_sys, tar_pros, level, tar_p_id,
-                                 not_extract.get(tar_sys))
-            if not tar_data:
-                continue
-            similarities[tar_sys], _not_extract = compute(base_data, tar_data,
-                                                          not_extract.get(tar_sys))
-            not_extract[tar_sys] = _not_extract
-    if not similarities:
+        # if len(tar_pros) > 1:  # 说明出现类多类实体处在同一级别上
+        #     tar_data = []
+        #     for i in range(len(tar_pros)):
+        #         tar_pro = tar_pros[i].split(',')
+        #         tar_data.extend(get_data2(tar_sys, tar_pro, level, tar_p_id,
+        #                                   not_extract.get(tar_sys), i))
+        tar_data = get_data2(tar_sys, tar_pros, level, tar_p_id,
+                             not_extract.get(tar_sys))
+        if not tar_data:
+            continue
+        similarities[tar_sys], _not_extract = compute(base_data, tar_data,
+                                                      not_extract.get(tar_sys))
+        not_extract[tar_sys] = _not_extract
+    res = [i for i in similarities if i]
+    if not res:
         return no_similarity(base_data, base_sys)
     df = combine_sim(similarities, base_sys)
     label_df = label_df.drop(base_sys, axis=1)
@@ -559,7 +563,7 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
     return df.append(fuse_in_same_level(label_df, root_results_bak, level, not_extract))
 
 
-def create_node_and_rel(node):
+def create_node_and_rel(stat_info, node):
     """Create a subgraph into `Neo4j` according to `node`.
 
     Args:
@@ -573,38 +577,52 @@ def create_node_and_rel(node):
     tx = graph.begin()
     root_node = create_node(tx, node.value, node.label, 0)
 
-    stat_info = {}  # 统计信息
-
-    def statistic(a_neo_node, i):
+    def statistic(a_neo_node):
         dict_info = dict(a_neo_node.items())
-        label = str(a_neo_node.labels).split(':')
-        label.remove('')
-        label.remove(fused_label)  # 本体的标签
-        space = BASE_SYS_ORDER[i]  # 空间的标签
+        # label = str(a_neo_node.labels).split(':')
+        # label.remove('')
+        # label.remove(fused_label)
+        # label = label[0]
         num = 0
+        ids = []
         for k in BASE_SYS_ORDER:
-            if dict_info.get(f'{BASE_SYS_ORDER[k]}Id'):
+            id_ = dict_info.get(f'{BASE_SYS_ORDER[k]}Id')
+            if id_:
+                ids.append(id_)
                 num += 1
-        if space + '/' + label not in stat_info:
-            if num > 1:
-                if dict_info.get('orgno'):
-                    stat_info[space+'/'+label] = {dict_info['orgno']: {'all': 1, 'only': 0}}
-                stat_info[space+'/'+label] = {'all': 1, 'only': 0}
-            else:
-                if dict_info.get('orgno'):
-                    stat_info[space+'/'+label] = {dict_info['orgno']: {'all': 0, 'only': 1}}
-                stat_info[space+'/'+label] = {'all': 0, 'only': 1}
-        else:
-            if num > 1:
-                if dict_info.get('orgno'):
-                    stat_info[space+'/'+label][dict_info['orgno']]['all'] += 1
-                stat_info[space+'/'+label]['all'] += 1
-            else:
-                if dict_info.get('orgno'):
-                    stat_info[space+'/'+label][dict_info['orgno']]['only'] += 1
-                stat_info[space+'/'+label]['only'] += 1
-
-    statistic(root_node, 0)
+        for i in BASE_SYS_ORDER:
+            space = BASE_SYS_ORDER[i]  # 空间的标签
+            for id_ in ids:
+                labels = tx.run(f'match(n) where id(n)={id_} return labels(n) as label').data()[0]['label']
+                try:
+                    labels.remove(space)
+                    label = labels[0]
+                except ValueError:
+                    continue
+                if space + '/' + label not in stat_info:
+                    if num > 1:
+                        stat_info[space + '/' + label] = {'all': 1, 'only': 0}
+                        if dict_info.get(f'{space}orgno'):
+                            stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 1, 'only': 0}})
+                    else:
+                        stat_info[space + '/' + label] = {'all': 0, 'only': 1}
+                        if dict_info.get(f'{space}orgno'):
+                            stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 0, 'only': 1}})
+                else:
+                    if num > 1:
+                        stat_info[space + '/' + label]['all'] += 1
+                        if dict_info.get(f'{space}orgno'):
+                            if dict_info[f'{space}orgno'] in stat_info[space + '/' + label]:
+                                stat_info[space + '/' + label][dict_info[f'{space}orgno']]['all'] += 1
+                            else:
+                                stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 1, 'only': 0}})
+                    else:
+                        stat_info[space + '/' + label]['only'] += 1
+                        if dict_info.get(f'{space}orgno'):
+                            if dict_info[f'{space}orgno'] in stat_info[space + '/' + label]:
+                                stat_info[space + '/' + label][dict_info[f'{space}orgno']]['only'] += 1
+                            else:
+                                stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 0, 'only': 1}})
 
     def func(p_node: Node, nodes: Nodes, i: int):
         """A recursive function to create subgraph.
@@ -622,8 +640,8 @@ def create_node_and_rel(node):
         if isinstance(nodes, list):
             return
         data = nodes.children
+        statistic(p_node)
         if not data:
-            statistic(p_node, i)
             tx.create(p_node)
             return
         for j in data:  # j也是一个`trie.Nodes`对象
@@ -631,6 +649,7 @@ def create_node_and_rel(node):
             rel = j.rel
             tx.create(Relationship(p_node, rel, node_))
             if not j.children:
+                statistic(node_)
                 continue
             else:  # node_存在子节点，因此递归调用
                 k = i + 1
@@ -665,10 +684,13 @@ def create_node(tx, value: list, label: str, level: int):
             continue
         v = int(v)
         data[f'{BASE_SYS_ORDER[i]}Id'] = v
-        org_no = tx.run(f"match(n) where id(n)={v} return n.orgno as orgno").data()[0]['orgno']
-        data[f'{BASE_SYS_ORDER[i]}OrgNo'] = org_no
+        a_dict = tx.run(f"match(n) where id(n)={v} return n.orgno as orgno, n.name as name").data()[0]
+        orgno = a_dict['orgno']
+        data[f'{BASE_SYS_ORDER[i]}orgno'] = orgno
+        data[f'orgno'] = orgno
+        data['name'] = a_dict['name']
 
-        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level].split(';')  # 某个系统、某个级别实体的迁移属性列表
+        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level][0]
         for p in pros:
             if p in tran_pros:  # 已有其他系统的属性被迁移
                 continue
@@ -782,9 +804,9 @@ def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id
                 matched = counter_all.iloc[i, j]
                 only = counter_only.iloc[i, j]
                 sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
-                      f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
-                      f"'{label}',{ontological_weight}, '{merge_cols}',{matched}, " \
-                      f"{only}, {next_batch_no}, '{start_time}', '{end_time}')"
+                    f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
+                    f"'{label}',{ontological_weight}, '{merge_cols}',{matched}, " \
+                    f"{only}, {next_batch_no}, '{start_time}', '{end_time}')"
                 cr.execute(sql)
     conn.commit()
 
@@ -800,17 +822,23 @@ def save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time):
             ontological_id, ontological_name, ontological_weight, merge_cols = \
                 mapping[ontology]
             total_matched, total_only = stat_info[i]['all'], stat_info[i]['only']
-            cr.execute(f"insert into gd_fuse_result values ('{id_}', '{task_id}', "
-                       f"'{space_id}', '{ontological_id}', '{ontological_name}', "
-                       f"'{ontology}',{ontological_weight}, '{merge_cols}',{total_matched}, "
-                       f"{total_only}, {next_batch_no}, '{start_time}', '{end_time}', '{None}')")
-            id_ = str(uuid1())
+            sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
+                f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
+                f"'{ontology}',{ontological_weight}, '{merge_cols}',{total_matched}, " \
+                f"{total_only}, {next_batch_no}, '{start_time}', '{end_time}', '{-1}')"
+            cr.execute(sql)
             for j in stat_info[i]:
+                id_2 = str(uuid1())
                 if j not in ['all', 'only']:
                     matched, only = stat_info[i][j]['all'], stat_info[i][j]['only']
-                    sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
-                          f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
-                          f"'{ontology}',{ontological_weight}, '{merge_cols}',{matched}, " \
-                          f"{only}, {next_batch_no}, '{start_time}', '{end_time}', '{j}')"
+                    sql = f"insert into gd_fuse_result values ('{id_2}', '{task_id}', " \
+                        f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
+                        f"'{ontology}',{ontological_weight}, '{merge_cols}',{matched}, " \
+                        f"{only}, {next_batch_no}, '{start_time}', '{end_time}', '{j}')"
                     cr.execute(sql)
+        cr.execute(f"update gd_fuse set fuse_status=5, fuse_speed=100, "
+                   f"start_time='{start_time}', end_time='{end_time}' "
+                   f"where id='{task_id}'")
     conn.commit()
+
+
