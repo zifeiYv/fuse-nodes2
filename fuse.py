@@ -104,6 +104,7 @@ def main_fuse(task_id: str) -> None:
                 base_ent_lab = LABEL[BASE_SYS_ORDER[0]].iloc[0]
                 for i in range(len(root_res_df)):
                     logger.info(f'进度：{i}/{len(root_res_df)}')
+                    update_progress(task_id, int(100 * (i + 1)/len(root_res_df)))
                     progress_data = {
                         "task_id": task_id,
                         "state": 2,
@@ -842,3 +843,8 @@ def save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time):
     conn.commit()
 
 
+def update_progress(task_id, integer):
+    conn = connect(**eval(mysql_res))
+    with conn.cursor() as cr:
+        cr.execute(f"update gd_fuse set fuse_speed={integer} where id='{task_id}'")
+    conn.commit()
