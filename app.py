@@ -41,8 +41,8 @@ def func():
         return jsonify({'state': 1, 'msg': "配置文件非法，查看日志输出"})
     logger.info("一切正常")
 
-    # main_fuse(task_id)
-    executor.submit(main_fuse, task_id)
+    main_fuse(task_id)
+    # executor.submit(main_fuse, task_id)
     return jsonify({"state": 2, "msg": "正在后台进行融合任务"})
 
 

@@ -118,6 +118,7 @@ def main_fuse(task_id: str) -> None:
                     # counter_all.append(b)
                     stat_info = create_node_and_rel(stat_info, node)
                     _ = requests.post(err_url, json=progress_data)
+                    save_detail_to_mysql(node, task_id)
                 # save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
                 #                   task_id, start_time)
                 save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time)
@@ -848,3 +849,87 @@ def update_progress(task_id, integer):
     with conn.cursor() as cr:
         cr.execute(f"update gd_fuse set fuse_speed={integer} where id='{task_id}'")
     conn.commit()
+
+
+def save_detail_to_mysql(node, task_id):
+    """将明细数据存储至mysql"""
+    conn = connect(**eval(mysql_res))
+    # 查看表中是否已经有结果
+    # 如果没有，那么新结果的批次号写成 1
+    # 如果有一批，那么新结果的批次号写成 2
+    # 如果有两批，那么删除批次号为1的结果、将批次号为2的结果的批次号改为1，并将新结果的批次号写成 2
+    sql = f'select count(distinct `batchNo`) from `gd_fuse_check_result` t where t.fuseId="{task_id}"'
+    with conn.cursor() as cr:
+        cr.execute(sql)
+        num_batches = cr.fetchone()[0]
+        if num_batches == 0:
+            new_batch = 1
+        elif num_batches == 1:
+            new_batch = 2
+        else:  # num_batches == 2
+            new_batch = 2
+            cr.execute(f"""
+                delete from `gd_fuse_check_result` t where t.fuseId='{task_id}' and t.batchNo=1
+            """)
+            cr.execute(f"""
+                update `gd_fuse_check_result` set batchNo=1 where fuseId='{task_id}' and batchNo=2
+            """)
+    conn.commit()
+
+    # 遍历node中的所有节点及其子节点，然后在图数据库中查询对应的属性信息，统计后写入
+    # MySQL
+    def traverse(node, value_list):
+        """遍历node，获取所有的融合值"""
+        value_list.append(node.value)
+        if node.children:
+            for n in node.children:
+                traverse(n, value_list)
+        return value_list
+    value_list = traverse(node, [])
+    for v in value_list:
+        info = get_info_from_neo4j(v)
+        with conn.cursor() as cr:
+            sql = f"""
+                insert into gd_fuse_check_result values(
+                "{str(uuid1())}", "{task_id}", "{new_batch}",
+                "{info[0]}", "{info[1]}", "{info[2]}", "{info[3]}",
+                "{info[4]}", "{info[5]}", "{info[6]}", "{info[7]}")
+            """
+            cr.execute(sql)
+    conn.commit()
+
+
+def get_info_from_neo4j(values: list):
+    """根据id，获取相应的属性"""
+    graph = Graph(neo4j_url, auth=auth)
+    is_exist_dict = {}
+    id_node_dict = {}
+    id_ = -1
+    space = ''
+    for i in range(values):
+        v = values[i]
+        if v != np.nan:
+            is_exist_dict[BASE_SYS_ORDER[i]] = 1
+            id_node_dict[BASE_SYS_ORDER[i]] = int(v)
+            if id_ == -1:  # 遍历id列表的时候，从第一个不为空的id所对应的节点来获取属性
+                id_ = int(v)
+                space = BASE_SYS_ORDER[i]
+        else:
+            is_exist_dict[BASE_SYS_ORDER[i]] = 0
+            id_node_dict[BASE_SYS_ORDER[i]] = -1
+
+    # 要从单网架图获取的属性名的列表 todo
+    pros = ['']
+    cypher = f'match(n:{space}) where id(n)={id_} return n.'
+    for p in pros:
+        cypher += p
+        cypher += f' as {p},'
+    cypher = cypher[: -1]
+    data = graph.run(cypher).data()[0]
+    # 按照顺序来将要存储的值写入列表
+    data_list = []
+    for p in pros:
+        data_list.append(data[p])
+
+    data_list.extend([str(is_exist_dict), str(id_node_dict)])
+    return data_list
