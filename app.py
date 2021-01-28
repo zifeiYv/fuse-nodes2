@@ -14,7 +14,6 @@ from self_check import check
 from flask import Flask, jsonify, request, json
 from werkzeug.exceptions import HTTPException
 from concurrent.futures import ProcessPoolExecutor
-# from progressbar import ProgressBar
 from fuse import main_fuse
 from log_utils import gen_logger
 import os
@@ -41,7 +40,7 @@ def func():
         return jsonify({'state': 1, 'msg': "配置文件非法，查看日志输出"})
     logger.info("一切正常")
 
-    main_fuse(task_id)
+    main_fuse(task_id)  # 调试时使用此处
     # executor.submit(main_fuse, task_id)
     return jsonify({"state": 2, "msg": "正在后台进行融合任务"})
 

@@ -11,7 +11,7 @@ from os.path import split, abspath
 
 current_path = split(abspath(__file__))[0]
 cfg = ConfigParser()
-with open(current_path + '/config_files/application.cfg') as f:
+with open(current_path + '/config_files/application.cfg', encoding='utf-8') as f:
     cfg.read_file(f)
 neo4j_url = cfg.get('neo4j', 'url')
 auth = eval(cfg.get('neo4j', 'auth'))
@@ -43,7 +43,7 @@ def check(task_id):
         except Exception as e:
             raise CheckError(e)
 
-    label, pro, trans, merged_label = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
+    label, pro, trans, merged_label, _ = get_paras(task_id)  # 从任务id，获取相关参数并处理成DataFrame的格式
 
     sys_num = label.shape[1]
     sys_labels = label.columns.values
@@ -109,6 +109,14 @@ def get_paras(task_id):
                    f"where t.fuse_id='{task_id}'")
         # 空间标签、本体标签、本体权重、融合依据属性
         info = cr.fetchall()
+        sql = f'select count(distinct `batch_no`) from `gd_fuse_check_result` t where t.fuse_id="{task_id}"'
+        cr.execute(sql)
+        num_batches = cr.fetchone()[0]
+        if num_batches == 0:
+            new_batch = 1
+        else:  # num_batches == 2
+            new_batch = num_batches + 1
+        conn.commit()
 
     # 由于给本体设置的权重不一定是从1开始的连续数字，
     # 因此需要对权重进行特别的处理后进行排序。
@@ -142,4 +150,4 @@ def get_paras(task_id):
 
     trans = pro.copy()
 
-    return label, pro, trans, merged_label
+    return label, pro, trans, merged_label, new_batch

@@ -17,6 +17,7 @@ import requests
 from log_utils import gen_logger
 from os.path import split, abspath
 import traceback
+from collections import OrderedDict
 
 logger = None
 LABEL, PRO, TRANS = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -60,43 +61,22 @@ def main_fuse(task_id: str) -> None:
     global logger
     logger = gen_logger(task_id)
     global LABEL, PRO, TRANS, BASE_SYS_ORDER, fused_label
-    LABEL, PRO, TRANS, fused_label = get_paras(task_id)
+    LABEL, PRO, TRANS, fused_label, new_batch = get_paras(task_id)
     print(LABEL)
     print(PRO)
     BASE_SYS_ORDER = sort_sys(LABEL)
     logger.info("Start to fuse...")
-    logger.info("Deleting old results..")
-    delete_old(fused_label)
-    logger.info("Deletion complete")
     logger.info("Fusing root nodes...")
     start_time = strftime("%Y-%m-%d %H:%M:%S")
-    mapping, next_batch_no = get_save_mapping(task_id)
-    # counter_only = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
-    # counter_all = pd.DataFrame(data=0, columns=LABEL.columns, index=LABEL.index)
-    stat_info = {}
     try:
         root_res_df = fuse_root_nodes()
     except Exception as e:
         logger.info(e)
         logger.info(traceback.print_exc())
-        err_data = {
-            "task_id": task_id,
-            "state": "1",
-            "msg": "Errors occur in root nodes fusion",
-            "progress": 0
-        }
-        requests.post(err_url, json=err_data)
         return
     else:
         if root_res_df.empty:
             logger.info("Root nodes fusion result is empty")
-            err_data = {
-                "task_id": task_id,
-                "state": "0",
-                "msg": "Root nodes fusion result is empty",
-                "progress": 0
-            }
-            requests.post(err_url, json=err_data)
             return
         else:
             logger.info("Root nodes fusion complete, start to fuse children nodes...")
@@ -105,25 +85,11 @@ def main_fuse(task_id: str) -> None:
                 for i in range(len(root_res_df)):
                     logger.info(f'进度：{i}/{len(root_res_df)}')
                     update_progress(task_id, int(100 * (i + 1)/len(root_res_df)))
-                    progress_data = {
-                        "task_id": task_id,
-                        "state": 2,
-                        "msg": "Fusing children nodes...",
-                        "progress": (i + 1) / len(root_res_df)
-                    }
                     node = Nodes(base_ent_lab, root_res_df.iloc[i].to_list())
                     fuse_other_nodes(1, node, BASE_SYS_ORDER)  # 执行之后，node包含了创建一个子图所需要的完整信息
-                    # a, b = caching(counter_only, counter_all, node)
-                    # counter_only.append(a)
-                    # counter_all.append(b)
-                    stat_info = create_node_and_rel(stat_info, node)
-                    _ = requests.post(err_url, json=progress_data)
-                    save_detail_to_mysql(node, task_id)
-                # save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no,
-                #                   task_id, start_time)
-                save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time)
-                print(stat_info)
+                    save_detail_to_mysql(node, task_id, new_batch)
                 logger.info("Fusion graph creation complete")
+                update_status(start_time, task_id)
                 finish_data = {
                     "task_id": task_id,
                     "state": 0,
@@ -565,285 +531,6 @@ def fuse_in_same_level(label_df: pd.DataFrame, parent_ids: list,
     return df.append(fuse_in_same_level(label_df, root_results_bak, level, not_extract))
 
 
-def create_node_and_rel(stat_info, node):
-    """Create a subgraph into `Neo4j` according to `node`.
-
-    Args:
-        node(Nodes): A :py:meth:`~utils.Nodes` object
-
-    Returns:
-        None
-
-    """
-    graph = Graph(neo4j_url, auth=auth)
-    tx = graph.begin()
-    root_node = create_node(tx, node.value, node.label, 0)
-
-    def statistic(a_neo_node):
-        dict_info = dict(a_neo_node.items())
-        # label = str(a_neo_node.labels).split(':')
-        # label.remove('')
-        # label.remove(fused_label)
-        # label = label[0]
-        num = 0
-        ids = []
-        for k in BASE_SYS_ORDER:
-            id_ = dict_info.get(f'{BASE_SYS_ORDER[k]}Id')
-            if id_:
-                ids.append(id_)
-                num += 1
-        for i in BASE_SYS_ORDER:
-            space = BASE_SYS_ORDER[i]  # 空间的标签
-            for id_ in ids:
-                labels = tx.run(f'match(n) where id(n)={id_} return labels(n) as label').data()[0]['label']
-                try:
-                    labels.remove(space)
-                    label = labels[0]
-                except ValueError:
-                    continue
-                if space + '/' + label not in stat_info:
-                    if num > 1:
-                        stat_info[space + '/' + label] = {'all': 1, 'only': 0}
-                        if dict_info.get(f'{space}orgno'):
-                            stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 1, 'only': 0}})
-                    else:
-                        stat_info[space + '/' + label] = {'all': 0, 'only': 1}
-                        if dict_info.get(f'{space}orgno'):
-                            stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 0, 'only': 1}})
-                else:
-                    if num > 1:
-                        stat_info[space + '/' + label]['all'] += 1
-                        if dict_info.get(f'{space}orgno'):
-                            if dict_info[f'{space}orgno'] in stat_info[space + '/' + label]:
-                                stat_info[space + '/' + label][dict_info[f'{space}orgno']]['all'] += 1
-                            else:
-                                stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 1, 'only': 0}})
-                    else:
-                        stat_info[space + '/' + label]['only'] += 1
-                        if dict_info.get(f'{space}orgno'):
-                            if dict_info[f'{space}orgno'] in stat_info[space + '/' + label]:
-                                stat_info[space + '/' + label][dict_info[f'{space}orgno']]['only'] += 1
-                            else:
-                                stat_info[space + '/' + label].update({dict_info[f'{space}orgno']: {'all': 0, 'only': 1}})
-
-    def func(p_node: Node, nodes: Nodes, i: int):
-        """A recursive function to create subgraph.
-
-        Args:
-            p_node: A `py2neo.Node` object, represents parent node which is already
-                created but not committed
-            nodes: A :py:meth:`~utils.Nodes` object
-            i: level of depth
-
-        Returns:
-            None
-
-        """
-        if isinstance(nodes, list):
-            return
-        data = nodes.children
-        statistic(p_node)
-        if not data:
-            tx.create(p_node)
-            return
-        for j in data:  # j也是一个`trie.Nodes`对象
-            node_ = create_node(tx, j.value, j.label, i)
-            rel = j.rel
-            tx.create(Relationship(p_node, rel, node_))
-            if not j.children:
-                statistic(node_)
-                continue
-            else:  # node_存在子节点，因此递归调用
-                k = i + 1
-                func(node_, j, k)
-
-    func(root_node, node, 1)
-    tx.commit()
-    return stat_info
-
-
-def create_node(tx, value: list, label: str, level: int):
-    """Create the new node according to a fuse result list.
-
-    The new node needs some properties and the corresponding values, which are transferred
-    from original nodes.
-
-    Args:
-        tx: A `Neo4j` transaction object
-        value: A list of original nodes' ids
-        label: The new label of the new fused nodes
-        level: Entity level
-
-    Returns:
-        A :py:meth:`~py2neo.Node` object
-
-    """
-    assert len(value) == LABEL.shape[1]
-    data = {}
-    tran_pros = set()
-    for i, v in enumerate(value):
-        if np.isnan(v):
-            continue
-        v = int(v)
-        data[f'{BASE_SYS_ORDER[i]}Id'] = v
-        a_dict = tx.run(f"match(n) where id(n)={v} return n.orgno as orgno, n.name as name").data()[0]
-        orgno = a_dict['orgno']
-        data[f'{BASE_SYS_ORDER[i]}orgno'] = orgno
-        data[f'orgno'] = orgno
-        data['name'] = a_dict['name']
-
-        pros = TRANS[BASE_SYS_ORDER[i]].iloc[level][0]
-        for p in pros:
-            if p in tran_pros:  # 已有其他系统的属性被迁移
-                continue
-            else:
-                val = tx.run(f"match (n) where id(n)={v} return n.{p} as p").data()[0]['p']
-                if val:
-                    tran_pros.add(p)
-                    data[f'{p}'] = val
-    return Node(*[label, fused_label], **data)
-
-
-def delete_old(label):
-    """Delete old fuse results.
-
-    Args:
-        label(str): Nodes' label
-
-    Returns:
-        None
-
-    """
-    graph = Graph(neo4j_url, auth=auth)
-    graph.run(f"match (n:`{label}`)-[r]-() delete r")
-    graph.run(f"match (n:`{label}`) delete n")
-
-
-def get_save_mapping(task_id: str):
-    """Obtain the data that needs to be stored into `MySQL`. Including:
-
-    - Times of computation for the same task
-    - Labels of system and ontology and some other mapping information
-
-    Args:
-        task_id: Id of fuse task
-
-    Returns:
-        A dict contains mapping information and an integer stands for times of
-        computation.
-
-    """
-    conn = connect(**eval(mysql_cfg))
-    with conn.cursor() as cr:
-        cr.execute(f"select max(`batchNo`) from gd_fuse_result where "
-                   f"fuse_id='{task_id}'")
-        cache = cr.fetchone()[0]
-        next_batch_no = cache + 1 if cache else 1
-
-        cr.execute(f"select space_id, space_label, ontological_id, ontological_name, "
-                   f"ontological_label, ontological_weight, "
-                   f"ontological_mapping_column_name "
-                   f"from gd_fuse_attribute t where t.fuse_id = '{task_id}'")
-        info = cr.fetchall()
-        # info: 空间标签的唯一标识，空间标签，本体标签的唯一标识，本体名称，
-        #       本体标签，本体权重，融合字段
-    mapping = {}
-    for i in info:
-        mapping[i[1]] = i[0]
-        mapping[i[4]] = [i[2], i[3], i[5], i[6]]
-
-    return mapping, next_batch_no
-
-
-def caching(counter_only: pd.DataFrame, counter_all: pd.DataFrame, node: Nodes, level=0):
-    """Count the number of each ontology in subgraphs, including:
-
-    - Number of ontology that exists in only one system
-    - Number of ontology that exists in more than one system
-
-    Args:
-        counter_only: A `pandas.DataFrame` that stores the number of ontology only exists
-            in ont system
-        counter_all: A `pandas.DataFrame` that stores the number of ontology exists in
-            more than one system
-        node: A :py:meth:`~utils.Nodes` object
-        level: Entity level
-
-    Returns:
-        `counter_only` and `counter_all`.
-
-    """
-    if pd.Series(node.value).count() == 1:
-        for i in range(len(node.value)):
-            if i is not None:
-                counter_only.iloc[level, i] += 1
-                break
-    else:
-        for i in range(len(node.value)):
-            if i is not None:
-                counter_all.iloc[level, i] += 1
-    if node.children:
-        for n in node.children:
-            a, b = caching(counter_only, counter_all, n, level + 1)
-            counter_only.append(a)
-            counter_all.append(b)
-    return counter_only, counter_all
-
-
-def save_res_to_mysql(counter_only, counter_all, mapping, next_batch_no, task_id,
-                      start_time):
-    """Save the count results to `MySQL`"""
-    conn = connect(**eval(mysql_res))
-    end_time = strftime("%Y-%m-%d %H:%M:%S")
-    with conn.cursor() as cr:
-        for i in range(counter_only.shape[0]):
-            for j in range(counter_only.shape[1]):
-                id_ = str(uuid1())
-                space_id = mapping[counter_only.columns[j]]
-                label = LABEL.iloc[i, j]
-                ontological_id, ontological_name, ontological_weight, merge_cols = \
-                    mapping[label]
-                matched = counter_all.iloc[i, j]
-                only = counter_only.iloc[i, j]
-                sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
-                    f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
-                    f"'{label}',{ontological_weight}, '{merge_cols}',{matched}, " \
-                    f"{only}, {next_batch_no}, '{start_time}', '{end_time}')"
-                cr.execute(sql)
-    conn.commit()
-
-
-def save_res_to_mysql2(stat_info, mapping, next_batch_no, task_id, start_time):
-    conn = connect(**eval(mysql_res))
-    end_time = strftime("%Y-%m-%d %H:%M:%S")
-    with conn.cursor() as cr:
-        for i in stat_info:
-            space, ontology = i.split('/')
-            id_ = str(uuid1())
-            space_id = mapping[space]
-            ontological_id, ontological_name, ontological_weight, merge_cols = \
-                mapping[ontology]
-            total_matched, total_only = stat_info[i]['all'], stat_info[i]['only']
-            sql = f"insert into gd_fuse_result values ('{id_}', '{task_id}', " \
-                f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
-                f"'{ontology}',{ontological_weight}, '{merge_cols}',{total_matched}, " \
-                f"{total_only}, {next_batch_no}, '{start_time}', '{end_time}', '{-1}')"
-            cr.execute(sql)
-            for j in stat_info[i]:
-                id_2 = str(uuid1())
-                if j not in ['all', 'only']:
-                    matched, only = stat_info[i][j]['all'], stat_info[i][j]['only']
-                    sql = f"insert into gd_fuse_result values ('{id_2}', '{task_id}', " \
-                        f"'{space_id}', '{ontological_id}', '{ontological_name}', " \
-                        f"'{ontology}',{ontological_weight}, '{merge_cols}',{matched}, " \
-                        f"{only}, {next_batch_no}, '{start_time}', '{end_time}', '{j}')"
-                    cr.execute(sql)
-        cr.execute(f"update gd_fuse set fuse_status=5, fuse_speed=100, "
-                   f"start_time='{start_time}', end_time='{end_time}' "
-                   f"where id='{task_id}'")
-    conn.commit()
-
-
 def update_progress(task_id, integer):
     conn = connect(**eval(mysql_res))
     with conn.cursor() as cr:
@@ -851,40 +538,20 @@ def update_progress(task_id, integer):
     conn.commit()
 
 
-def save_detail_to_mysql(node, task_id):
+def save_detail_to_mysql(node, task_id, new_batch):
     """将明细数据存储至mysql"""
     conn = connect(**eval(mysql_res))
-    # 查看表中是否已经有结果
-    # 如果没有，那么新结果的批次号写成 1
-    # 如果有一批，那么新结果的批次号写成 2
-    # 如果有两批，那么删除批次号为1的结果、将批次号为2的结果的批次号改为1，并将新结果的批次号写成 2
-    sql = f'select count(distinct `batchNo`) from `gd_fuse_check_result` t where t.fuseId="{task_id}"'
-    with conn.cursor() as cr:
-        cr.execute(sql)
-        num_batches = cr.fetchone()[0]
-        if num_batches == 0:
-            new_batch = 1
-        elif num_batches == 1:
-            new_batch = 2
-        else:  # num_batches == 2
-            new_batch = 2
-            cr.execute(f"""
-                delete from `gd_fuse_check_result` t where t.fuseId='{task_id}' and t.batchNo=1
-            """)
-            cr.execute(f"""
-                update `gd_fuse_check_result` set batchNo=1 where fuseId='{task_id}' and batchNo=2
-            """)
-    conn.commit()
-
     # 遍历node中的所有节点及其子节点，然后在图数据库中查询对应的属性信息，统计后写入
     # MySQL
+
     def traverse(node, value_list):
         """遍历node，获取所有的融合值"""
         value_list.append(node.value)
         if node.children:
             for n in node.children:
-                traverse(n, value_list)
+                value_list = traverse(n, value_list)
         return value_list
+
     value_list = traverse(node, [])
     for v in value_list:
         info = get_info_from_neo4j(v)
@@ -893,7 +560,8 @@ def save_detail_to_mysql(node, task_id):
                 insert into gd_fuse_check_result values(
                 "{str(uuid1())}", "{task_id}", "{new_batch}",
                 "{info[0]}", "{info[1]}", "{info[2]}", "{info[3]}",
-                "{info[4]}", "{info[5]}", "{info[6]}", "{info[7]}")
+                "{info[4]}", "{info[5]}", "{info[6]}", "{info[7]}",
+                "{info[8]}", "{info[9]}")
             """
             cr.execute(sql)
     conn.commit()
@@ -905,31 +573,52 @@ def get_info_from_neo4j(values: list):
     is_exist_dict = {}
     id_node_dict = {}
     id_ = -1
+    status = 1
     space = ''
-    for i in range(values):
+    for i in range(len(values)):
         v = values[i]
-        if v != np.nan:
+        if not np.isnan(v):
             is_exist_dict[BASE_SYS_ORDER[i]] = 1
             id_node_dict[BASE_SYS_ORDER[i]] = int(v)
             if id_ == -1:  # 遍历id列表的时候，从第一个不为空的id所对应的节点来获取属性
                 id_ = int(v)
                 space = BASE_SYS_ORDER[i]
         else:
-            is_exist_dict[BASE_SYS_ORDER[i]] = 0
+            is_exist_dict[BASE_SYS_ORDER[i]] = 2
+            status = 2
             id_node_dict[BASE_SYS_ORDER[i]] = -1
 
     # 要从单网架图获取的属性名的列表 todo
-    pros = ['']
+    pros = OrderedDict({
+        "orgCode": "merit_orgCode",
+        "provinceCompany": "merit_province",
+        "cityCompany": "merit_city",
+        "countyCompany": "merit_district",
+        "equipmentType": "entityType",
+        "equipmentName": "name"
+    })
     cypher = f'match(n:{space}) where id(n)={id_} return n.'
     for p in pros:
-        cypher += p
-        cypher += f' as {p},'
-    cypher = cypher[: -1]
+        cypher += pros[p]
+        cypher += f' as {p},n.'
+    cypher = cypher[: -3]
     data = graph.run(cypher).data()[0]
     # 按照顺序来将要存储的值写入列表
     data_list = []
     for p in pros:
         data_list.append(data[p])
 
+    data_list.append(id_)
     data_list.extend([str(is_exist_dict), str(id_node_dict)])
+    data_list.append(status)
     return data_list
+
+
+def update_status(start_time, task_id):
+    conn = connect(**eval(mysql_res))
+    end_time = strftime("%Y-%m-%d %H:%M:%S")
+    with conn.cursor() as cr:
+        cr.execute(f"update gd_fuse set fuse_status=5, fuse_speed=100, "
+                   f"start_time='{start_time}', end_time='{end_time}' "
+                   f"where id='{task_id}'")
+    conn.commit()

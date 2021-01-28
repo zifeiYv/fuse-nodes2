@@ -137,6 +137,12 @@ class Computation:
             嵌套的列表
 
         """
+        if sum(sim_matrix.shape) == 2:  # 说明两个系统各只有一个实体进行融合
+            if sim_matrix[0, 0] < self.thresh:
+                self.match_res.append([0, None])
+                self.match_res.append([None, 0])
+                return self.match_res
+
         self.__match(sim_matrix)
 
         if not self.match_res:
